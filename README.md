@@ -1,5 +1,11 @@
 # Smart Grind-by-Weight
 
+> [!NOTE]
+> **Mein Umbau (Eureka Mignon + Waveshare 1.64" V2):** Abweichend vom Original von jaapp nutzt dieser Fork
+> die V2-Firmware v1.5.9 (SH8601-Display) mit geänderter Verkabelung: HX711 SCK an **GPIO 1** statt 2,
+> Motor an **GPIO 16** statt 18, GPIO 18 bleibt frei.
+> Details: [docs/MEIN_SETUP.md](docs/MEIN_SETUP.md) · Firmware: [firmware/v1.5.9-v2](firmware/v1.5.9-v2/)
+
 [![Latest release](https://img.shields.io/github/v/release/Clinteastman/smart-grind-by-weight?display_name=tag&logo=github)](https://github.com/Clinteastman/smart-grind-by-weight/releases/latest)
 [![Firmware](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/firmware.yml/badge.svg)](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/firmware.yml)
 [![Desktop simulator](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/simulator.yml/badge.svg)](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/simulator.yml)
