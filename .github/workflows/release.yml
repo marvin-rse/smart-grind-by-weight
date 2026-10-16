@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'  # Triggers on version tags like v1.0.0, v1.2.3
+    branches:
+      - 'release/v*'  # release/v1.2.3 builds and publishes tag v1.2.3
 
 permissions:
   contents: write
