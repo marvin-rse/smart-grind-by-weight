@@ -28,6 +28,13 @@ private:
     esp_lcd_panel_io_handle_t panel_io;
     esp_lcd_panel_handle_t panel_handle;
     lv_display_t* pending_flush_display;
+    // The SH8601 GRAM holds random data after power-up. Keep the backlight at
+    // zero until LVGL has pushed its first complete frame, then apply the
+    // brightness requested in the meantime.
+    bool startup_frame_rendered = false;
+    bool startup_frame_presented = false;
+    float deferred_brightness = -1.0f;
+    uint32_t startup_blank_started_ms = 0;
 #else
     Arduino_DataBus* bus;
     Arduino_GFX* gfx_device;
@@ -83,6 +90,10 @@ private:
     static void touchpad_read_cb(lv_indev_t* indev, lv_indev_data_t* data);
     bool filter_touch_for_panel_wake(const TouchData& touch);
     static uint32_t millis_cb();
+#if HW_DISPLAY_VARIANT_V2
+    void apply_brightness(float brightness);
+    void present_startup_frame_if_ready();
+#endif
 };
 
 extern DisplayManager* g_display_manager;

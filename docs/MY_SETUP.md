@@ -35,6 +35,8 @@ This file documents my specific build. It is based on this fork of
 - Installed: **v1.5.9 – Newer SH8601 (V2 firmware; may say Rev1.1)**
 - Flashed with the [Community Web Flasher](https://clinteastman.github.io/smart-grind-by-weight/) (Chrome/Edge, USB)
 - Copy of the application image: [`firmware/v1.5.9-v2/`](../firmware/v1.5.9-v2/)
+- Custom build without the green flash at power-on (untested):
+  [`firmware/v1.5.9-v2-boot-fix/`](../firmware/v1.5.9-v2-boot-fix/)
 
 The image there is the **application image** (for updates via Wi-Fi/Bluetooth:
 *System & updates → Manual firmware file*). For a full fresh install over USB,

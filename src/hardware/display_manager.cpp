@@ -26,7 +26,6 @@ static const uint8_t kCmd35[] = {0x00};
 static const uint8_t kCmd53[] = {0x20};
 static const uint8_t kCmd63[] = {0xFF};
 static const uint8_t kBrightnessOff[] = {0x00};
-static const uint8_t kBrightnessFull[] = {0xFF};
 static const sh8601_lcd_init_cmd_t kV2InitCommands[] = {
     {0x11, nullptr, 0, 80},
     {0xC4, kCmdC4, sizeof(kCmdC4), 0},
@@ -34,9 +33,13 @@ static const sh8601_lcd_init_cmd_t kV2InitCommands[] = {
     {0x53, kCmd53, sizeof(kCmd53), 1},
     {0x63, kCmd63, sizeof(kCmd63), 1},
     {0x51, kBrightnessOff, sizeof(kBrightnessOff), 1},
+    // Brightness stays at zero here: the panel RAM is still uninitialised and
+    // would flash green. DisplayManager raises it after the first LVGL frame.
     {0x29, nullptr, 0, 10},
-    {0x51, kBrightnessFull, sizeof(kBrightnessFull), 0},
 };
+
+// Fallback so a missing first frame can never leave the screen dark forever.
+constexpr uint32_t kStartupBlankTimeoutMs = 3000;
 }
 #endif
 
@@ -83,6 +86,7 @@ void DisplayManager::init() {
         esp_lcd_panel_disp_on_off(panel_handle, true) != ESP_OK) {
         return;
     }
+    startup_blank_started_ms = millis();
 #else
     // Initialize V1 display hardware
     bus = new Arduino_ESP32QSPI(
@@ -191,6 +195,9 @@ void DisplayManager::update() {
     const uint32_t started_us = micros();
     touch_driver.update();
     lv_timer_handler();
+#if HW_DISPLAY_VARIANT_V2
+    present_startup_frame_if_ready();
+#endif
 
     const uint32_t now_ms = millis();
     metrics_window.ui_calls++;
@@ -310,6 +317,9 @@ void DisplayManager::display_metrics_cb(lv_event_t* e) {
             g_display_manager->render_started_us = micros();
             break;
         case LV_EVENT_RENDER_READY:
+#if HW_DISPLAY_VARIANT_V2
+            g_display_manager->startup_frame_rendered = true;
+#endif
             if (g_display_manager->render_started_us != 0) {
                 g_display_manager->metrics_window.render_time_us +=
                     micros() - g_display_manager->render_started_us;
@@ -434,17 +444,42 @@ void DisplayManager::set_brightness(float brightness) {
     if (brightness < 0.0f) brightness = 0.0f;
     if (brightness > 1.0f) brightness = 1.0f;
     
-    uint8_t brightness_value = (uint8_t)(brightness * 255.0f);
 #if HW_DISPLAY_VARIANT_V2
-    uint32_t brightness_command = (0x02UL << 24) | (0x51UL << 8);
-    esp_lcd_panel_io_tx_param(panel_io, brightness_command,
-                              &brightness_value, sizeof(brightness_value));
+    if (!startup_frame_presented) {
+        deferred_brightness = brightness;
+        return;
+    }
+    apply_brightness(brightness);
 #else
+    uint8_t brightness_value = (uint8_t)(brightness * 255.0f);
     // Cast to CO5300 and call setBrightness with 8-bit value
     Arduino_CO5300* display = static_cast<Arduino_CO5300*>(gfx_device);
     display->setBrightness(brightness_value);
 #endif
 }
+
+#if HW_DISPLAY_VARIANT_V2
+void DisplayManager::apply_brightness(float brightness) {
+    uint8_t brightness_value = (uint8_t)(brightness * 255.0f);
+    uint32_t brightness_command = (0x02UL << 24) | (0x51UL << 8);
+    esp_lcd_panel_io_tx_param(panel_io, brightness_command,
+                              &brightness_value, sizeof(brightness_value));
+}
+
+void DisplayManager::present_startup_frame_if_ready() {
+    if (startup_frame_presented) return;
+
+    const bool timed_out = millis() - startup_blank_started_ms >= kStartupBlankTimeoutMs;
+    // Wait until the last DMA strip of the first frame has been sent.
+    const bool frame_complete = startup_frame_rendered && pending_flush_display == nullptr;
+    if (!frame_complete && !timed_out) return;
+
+    startup_frame_presented = true;
+    apply_brightness(deferred_brightness >= 0.0f ? deferred_brightness
+                                                 : USER_SCREEN_BRIGHTNESS_NORMAL);
+    LOG_BLE("[DISPLAY] Startup frame presented%s\n", timed_out && !frame_complete ? " (timeout)" : "");
+}
+#endif
 
 void DisplayManager::set_panel_power(bool powered_on) {
 #if HW_DISPLAY_VARIANT_V2
