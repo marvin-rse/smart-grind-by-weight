@@ -267,3 +267,14 @@ jobs:
 
           echo "Uploading firmware assets for $TAG (prerelease: ${IS_PRERELEASE})"
           gh release upload "$TAG" release-artifacts/* --clobber
+
+      - name: Publish release and refresh web flasher
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=${{ github.ref_name }}
+          gh release edit "$TAG" --draft=false
+          # Releases published with GITHUB_TOKEN do not trigger other workflows,
+          # so start the web flasher deployment explicitly.
+          gh workflow run deploy-web-flasher.yml --ref main

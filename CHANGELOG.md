@@ -4,6 +4,12 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.5.9-beta.1] - 2026-10-16
+
+### Fixed
+- V2 (SH8601) display no longer flashes green at power-on. The backlight stays
+  off until the first UI frame has been drawn, with a 3-second fallback.
+
 ## [1.5.9] - 2026-09-06
 
 ### Firmware update hotfix
