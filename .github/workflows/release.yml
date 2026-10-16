@@ -19,6 +19,9 @@ jobs:
       SMART_GRIND_BUILD_NUMBER: ${{ github.run_number }}
     
     steps:
+      - name: Resolve release tag
+        run: echo "RELEASE_TAG=${GITHUB_REF_NAME#release/}" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@v6
         with:
@@ -73,7 +76,7 @@ jobs:
       - name: Prepare release artifacts
         run: |
           mkdir -p release-artifacts
-          VERSION=${{ github.ref_name }}
+          VERSION=${{ env.RELEASE_TAG }}
 
           # Copy firmware binaries with versioned names
           cp release-builds/v1/firmware.bin release-artifacts/smart-grind-by-weight-${VERSION}.bin
@@ -181,23 +184,23 @@ jobs:
           ## Installation
 
           ### Web Installer (Recommended)
-          Visit [Web Installer](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/) and select firmware version ${{ github.ref_name }} for your Waveshare V1 or V2 board revision.
+          Visit [Web Installer](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/) and select firmware version ${{ env.RELEASE_TAG }} for your Waveshare V1 or V2 board revision.
 
           **Note:** Requires Chrome/Edge (desktop or Android). iOS/Safari not supported.
 
           ### Command Line (Alternative)
           1. Download the firmware matching your board revision:
-             - V1: \`smart-grind-by-weight-${{ github.ref_name }}.bin\`
-             - V2: \`smart-grind-by-weight-${{ github.ref_name }}-waveshare-164-v2.bin\`
+             - V1: \`smart-grind-by-weight-${{ env.RELEASE_TAG }}.bin\`
+             - V2: \`smart-grind-by-weight-${{ env.RELEASE_TAG }}-waveshare-164-v2.bin\`
           2. Use the grinder tool to upload the selected file, for example: \`python3 tools/grinder.py upload <firmware-file>.bin\`
 
           ## Build Information
           - Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           - Commit: ${{ github.sha }}
-          - Tag: ${{ github.ref_name }}
+          - Tag: ${{ env.RELEASE_TAG }}
           EOF
 
-          export RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          export RELEASE_VERSION="${RELEASE_TAG#v}"
           python - <<'PY' >> release-notes.md
           import os
           import re
@@ -229,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          TAG=${{ github.ref_name }}
+          TAG=${{ env.RELEASE_TAG }}
           TITLE=${TAG}
 
           # Default to stable release; override when tag indicates prerelease
@@ -255,7 +258,7 @@ jobs:
             gh release edit "$TAG" --draft=true $PRERELEASE_EDIT_FLAG --title "$TITLE" --notes-file release-notes.md
           else
             echo "Creating new draft release $TAG"
-            gh release create "$TAG" --draft $PRERELEASE_CREATE_FLAG --title "$TITLE" --notes-file release-notes.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft $PRERELEASE_CREATE_FLAG --title "$TITLE" --notes-file release-notes.md
           fi
 
       - name: Upload release assets
@@ -264,7 +267,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          TAG=${{ github.ref_name }}
+          TAG=${{ env.RELEASE_TAG }}
           IS_PRERELEASE=${IS_PRERELEASE:-false}
 
           echo "Uploading firmware assets for $TAG (prerelease: ${IS_PRERELEASE})"
@@ -275,7 +278,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG=${{ github.ref_name }}
+          TAG=${{ env.RELEASE_TAG }}
           gh release edit "$TAG" --draft=false
           # Releases published with GITHUB_TOKEN do not trigger other workflows,
           # so start the web flasher deployment explicitly.
