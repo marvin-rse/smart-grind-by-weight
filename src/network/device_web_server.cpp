@@ -66,6 +66,26 @@ bool request_origin_allowed(AsyncWebServerRequest* request) {
     return origin && origin->value() == ("http://" + request->host());
 }
 
+// Reads the required numeric ?id= parameter. Sends a 400 response and returns
+// false when it is missing or invalid.
+bool read_history_session_id(AsyncWebServerRequest* request, uint32_t& id) {
+    if (!request->hasParam("id")) {
+        request->send(400, "application/json", "{\"error\":\"Session id is required\"}");
+        return false;
+    }
+    const String text_id = request->getParam("id")->value();
+    bool valid = text_id.length() > 0 && text_id.length() <= 10;
+    for (size_t i = 0; valid && i < text_id.length(); ++i) {
+        valid = isDigit(text_id[i]);
+    }
+    id = valid ? static_cast<uint32_t>(strtoul(text_id.c_str(), nullptr, 10)) : 0;
+    if (id == 0) {
+        request->send(400, "application/json", "{\"error\":\"Invalid session id\"}");
+        return false;
+    }
+    return true;
+}
+
 bool history_is_busy(const GrindController* controller) {
     if (!controller) return false;
     const GrindPhase phase = controller->get_phase();
@@ -543,25 +563,11 @@ void DeviceWebServer::configure_routes() {
     });
 
     server_.on(AsyncURIMatcher::exact("/api/v1/history/session"), HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (!request->hasParam("id")) {
-            request->send(400, "application/json", "{\"error\":\"Session id is required\"}");
-            return;
-        }
+        uint32_t id = 0;
+        if (!read_history_session_id(request, id)) return;
         if (history_is_busy(grind_controller_) || ota_active_.load() ||
             (bluetooth_manager_ && bluetooth_manager_->is_transfer_active())) {
             request->send(409, "application/json", "{\"error\":\"History is busy; try again when the grinder is idle\"}");
-            return;
-        }
-        const String text_id = request->getParam("id")->value();
-        for (size_t i = 0; i < text_id.length(); ++i) {
-            if (!isDigit(text_id[i])) {
-                request->send(400, "application/json", "{\"error\":\"Invalid session id\"}");
-                return;
-            }
-        }
-        const uint32_t id = text_id.toInt();
-        if (id == 0) {
-            request->send(400, "application/json", "{\"error\":\"Invalid session id\"}");
             return;
         }
         char path[48];
@@ -575,6 +581,36 @@ void DeviceWebServer::configure_routes() {
             LittleFS, path, "application/vnd.smartgrind.session", download);
         response->addHeader("Cache-Control", "private, no-store");
         request->send(response);
+    });
+
+    server_.on(AsyncURIMatcher::exact("/api/v1/history/session"), HTTP_DELETE, [this](AsyncWebServerRequest* request) {
+        if (!request_origin_allowed(request)) {
+            request->send(403, "application/json", "{\"error\":\"Request origin is not allowed\"}");
+            return;
+        }
+        uint32_t id = 0;
+        if (!read_history_session_id(request, id)) return;
+        if (history_is_busy(grind_controller_) || ota_active_.load() ||
+            (bluetooth_manager_ && bluetooth_manager_->is_transfer_active())) {
+            request->send(409, "application/json", "{\"error\":\"History is busy; try again when the grinder is idle\"}");
+            return;
+        }
+
+        bool statistics_adjusted = false;
+        switch (grind_logger.delete_session(id, statistics_adjusted)) {
+            case SessionDeleteResult::DELETED:
+                request->send(200, "application/json",
+                              statistics_adjusted ? "{\"deleted\":true,\"statistics_adjusted\":true}"
+                                                  : "{\"deleted\":true,\"statistics_adjusted\":false}");
+                break;
+            case SessionDeleteResult::NOT_FOUND:
+                request->send(404, "application/json", "{\"error\":\"Session not found\"}");
+                break;
+            case SessionDeleteResult::FAILED:
+            default:
+                request->send(500, "application/json", "{\"error\":\"Could not delete session\"}");
+                break;
+        }
     });
 
     server_.on(

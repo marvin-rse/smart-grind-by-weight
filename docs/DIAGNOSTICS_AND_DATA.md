@@ -63,6 +63,13 @@ choose **History** to inspect the latest 10 sessions, including accuracy,
 consistency, weight and flow graphs. Download any session as CSV, JSON or its
 original raw record directly in the browser.
 
+To discard a session that was not a real grind (for example a test or an
+aborted dose), open it in **History** and select **Delete**. The session is
+removed from the device and, if it had been counted, from the lifetime
+statistics (grind count, shot sizes, total weight, accuracy and pulses).
+Lifetime motor runtime is kept because the motor really ran. Deletion cannot be
+undone. The same action is available as `DELETE /api/v1/history/session?id=<id>`.
+
 The Python dashboard remains a legacy archive/recovery option when you want to
 collect sessions beyond the device's bounded history:
 

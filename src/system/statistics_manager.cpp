@@ -52,6 +52,16 @@ private:
     SemaphoreHandle_t mutex_;
 };
 
+// Counters are decremented when a session is deleted. Statistics may have been
+// reset after the session was recorded, so never wrap below zero.
+void decrement_count(uint32_t& counter, uint32_t amount = 1) {
+    counter = counter > amount ? counter - amount : 0;
+}
+
+void subtract_sum(float& sum, float amount) {
+    sum = sum > amount ? sum - amount : 0.0f;
+}
+
 constexpr uint32_t kPulseFlushThreshold = 50;        // Flush every ~5 seconds of pulses
 constexpr uint32_t kPulseDurationMs = 100;           // Each time-mode pulse is 100ms
 constexpr uint32_t kMaxFlushIntervalMs = 10000;      // Failsafe flush window
@@ -108,6 +118,42 @@ void StatisticsManager::update_grind_session(float final_weight, float error_gra
 
     mark_dirty_locked();
     persist_locked(true); // Session-level updates should persist immediately
+}
+
+void StatisticsManager::remove_grind_session(float final_weight, float error_grams, uint8_t pulse_count,
+                                             bool is_weight_mode) {
+    if (!initialized_) return;
+
+    StatsLockGuard lock(g_stats_mutex);
+
+    decrement_count(snapshot_.total_grinds);
+
+    // Same shot-size classification as update_grind_session().
+    if (final_weight <= 10.0f) {
+        decrement_count(snapshot_.single_shots);
+    } else if (final_weight <= 22.0f) {
+        decrement_count(snapshot_.double_shots);
+    } else {
+        decrement_count(snapshot_.custom_shots);
+    }
+
+    if (is_weight_mode) {
+        decrement_count(snapshot_.weight_mode_grinds);
+        decrement_count(snapshot_.accuracy_sample_count);
+        subtract_sum(snapshot_.accuracy_sum, std::fabs(error_grams));
+        if (snapshot_.accuracy_sample_count == 0) snapshot_.accuracy_sum = 0.0f;
+    } else {
+        decrement_count(snapshot_.time_mode_grinds);
+    }
+
+    subtract_sum(snapshot_.total_weight_kg, final_weight / 1000.0f);
+    decrement_count(snapshot_.total_pulses, pulse_count);
+    decrement_count(snapshot_.pulse_sample_count);
+    subtract_sum(snapshot_.pulse_sum, static_cast<float>(pulse_count));
+    if (snapshot_.pulse_sample_count == 0) snapshot_.pulse_sum = 0.0f;
+
+    mark_dirty_locked();
+    persist_locked(true);
 }
 
 void StatisticsManager::update_motor_test(uint32_t duration_ms) {

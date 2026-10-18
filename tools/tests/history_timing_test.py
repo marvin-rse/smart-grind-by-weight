@@ -16,6 +16,7 @@ class HistoryTimingTest(unittest.TestCase):
                            if not line.startswith(("#include", "#pragma once")))
         methods = "\n".join(function(source, sig) for sig in (
             "GrindTerminationReason classify_termination_reason(",
+            "bool counts_toward_statistics(",
             "void GrindLogger::end_grind_session(",
             "void GrindLogger::log_continuous_measurement("))
         harness = r'''

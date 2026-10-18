@@ -140,6 +140,12 @@ static_assert(sizeof(GrindEvent) == 44, "Unexpected GrindEvent size");
 static_assert(sizeof(GrindMeasurement) == 24, "Unexpected GrindMeasurement size");
 static_assert(sizeof(GrindSession) == 80, "Unexpected GrindSession size");
 
+enum class SessionDeleteResult : uint8_t {
+    DELETED,
+    NOT_FOUND,
+    FAILED
+};
+
 // Time-series grind logging manager
 class GrindLogger {
 private:
@@ -186,6 +192,9 @@ public:
     // Flash storage management
     bool flush_session_to_flash();          // Flush current session to flash
     bool clear_all_sessions_from_flash();   // Purge all stored sessions (for developer purge)
+    // Delete one stored session and remove its contribution from lifetime statistics.
+    // statistics_adjusted reports whether the session had been counted there.
+    SessionDeleteResult delete_session(uint32_t session_id, bool& statistics_adjusted);
     uint32_t count_sessions_in_flash() const; // Count total sessions in flash file
     uint32_t count_total_events_in_flash() const; // Count total events across all sessions
     uint32_t count_total_measurements_in_flash() const; // Count total measurements across all sessions

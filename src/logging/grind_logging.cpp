@@ -36,6 +36,12 @@ GrindTerminationReason classify_termination_reason(const char* final_result) {
     return GrindTerminationReason::UNKNOWN;
 }
 
+// Lifetime statistics only include grinds that finished normally.
+bool counts_toward_statistics(GrindTerminationReason reason) {
+    return reason == GrindTerminationReason::COMPLETED ||
+           reason == GrindTerminationReason::MAX_PULSES;
+}
+
 }
 
 GrindLogger grind_logger;
@@ -182,8 +188,7 @@ void GrindLogger::end_grind_session(const char* final_result, float final_weight
 
     // Only update statistics for successful grinds (completed within tolerance)
     // Failed grinds (timeout, overshoot) are saved for analysis but excluded from statistics
-    bool is_successful_grind = (termination_reason == GrindTerminationReason::COMPLETED ||
-                                termination_reason == GrindTerminationReason::MAX_PULSES);
+    bool is_successful_grind = counts_toward_statistics(termination_reason);
 
     if (is_successful_grind) {
         bool is_weight_mode = (mode == GrindMode::WEIGHT);
@@ -607,6 +612,47 @@ bool GrindLogger::clear_all_sessions_from_flash() {
 }
 
 
+
+SessionDeleteResult GrindLogger::delete_session(uint32_t session_id, bool& statistics_adjusted) {
+    statistics_adjusted = false;
+    if (session_id == 0 || !validate_session_file(session_id)) {
+        return SessionDeleteResult::NOT_FOUND;
+    }
+
+    char filename[64];
+    snprintf(filename, sizeof(filename), SESSION_FILE_FORMAT, static_cast<unsigned long>(session_id));
+    File file = LittleFS.open(filename, "r");
+    TimeSeriesSessionHeader header{};
+    GrindSession session{};
+    const bool read_ok = file &&
+        file.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) == sizeof(header) &&
+        file.read(reinterpret_cast<uint8_t*>(&session), sizeof(session)) == sizeof(session);
+    if (file) file.close();
+    if (!read_ok) {
+        return SessionDeleteResult::FAILED;
+    }
+
+    // Remove the file first so statistics are never adjusted for a session that remains.
+    if (!LittleFS.remove(filename)) {
+        LOG_BLE("ERROR: Failed to delete session %lu\n", static_cast<unsigned long>(session_id));
+        return SessionDeleteResult::FAILED;
+    }
+    mark_session_storage_dirty();
+
+    const auto reason = static_cast<GrindTerminationReason>(session.termination_reason);
+    if (counts_toward_statistics(reason)) {
+        statistics_manager.remove_grind_session(
+            session.final_weight,
+            session.error_grams,
+            session.pulse_count,
+            static_cast<GrindMode>(session.grind_mode) == GrindMode::WEIGHT);
+        statistics_adjusted = true;
+    }
+
+    LOG_BLE("Deleted session %lu from history%s\n", static_cast<unsigned long>(session_id),
+            statistics_adjusted ? " and lifetime statistics" : "");
+    return SessionDeleteResult::DELETED;
+}
 
 #if ENABLE_GRIND_DEBUG
 void GrindLogger::print_struct_layout_debug() {

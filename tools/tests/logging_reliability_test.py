@@ -27,6 +27,7 @@ class LoggingReliabilityTest(unittest.TestCase):
         source = (ROOT / "src/logging/grind_logging.cpp").read_text()
         methods = "\n".join(function(source, signature) for signature in (
             "GrindTerminationReason classify_termination_reason(",
+            "bool counts_toward_statistics(",
             "bool GrindLogger::init(", "void GrindLogger::cleanup(",
             "void GrindLogger::start_grind_session(", "void GrindLogger::end_grind_session(",
             "void GrindLogger::clear_buffers(",
@@ -39,6 +40,7 @@ class LoggingReliabilityTest(unittest.TestCase):
             "bool GrindLogger::remove_session_file(",
             "void GrindLogger::cleanup_old_session_files(",
             "void GrindLogger::mark_session_storage_dirty(",
+            "SessionDeleteResult GrindLogger::delete_session(",
         ))
         header = without_includes((ROOT / "src/logging/grind_logging.h").read_text())
         data_header = without_includes((ROOT / "src/bluetooth/data_stream.h").read_text())
@@ -91,7 +93,15 @@ struct Preferences {
 };
 unsigned long millis() { return 1000; }
 struct Statistics {
+    int removed_sessions = 0;
+    float removed_weight = 0, removed_error = 0;
+    uint8_t removed_pulses = 0;
+    bool removed_weight_mode = false;
     void update_grind_session(float, float, uint8_t, bool, uint32_t) {}
+    void remove_grind_session(float weight, float error, uint8_t pulses, bool weight_mode) {
+        ++removed_sessions; removed_weight = weight; removed_error = error;
+        removed_pulses = pulses; removed_weight_mode = weight_mode;
+    }
 } statistics_manager;
 struct Node {
     std::string name;
@@ -294,6 +304,45 @@ int main() {
     assert(LittleFS.removed[0] == "/sessions/session_1.bin");
     assert(LittleFS.removed[1] == "/sessions/session_2.bin");
     assert(grind_logger.session_storage_version == version + 1);
+
+    // Deleting one history entry removes its file and, for counted grinds only,
+    // its contribution to lifetime statistics.
+    LittleFS.directory_reads.clear();
+    auto write_result = [](uint32_t id, GrindTerminationReason reason, uint8_t mode) {
+        GrindSession session; session.session_id = id; session.session_timestamp = 1234;
+        session.final_weight = 18.4f; session.error_grams = -0.4f; session.pulse_count = 2;
+        session.grind_mode = mode; session.termination_reason = static_cast<uint8_t>(reason);
+        GrindEvent events[2]; GrindMeasurement measurements[3];
+        grind_logger.event_count = 2; grind_logger.measurement_count = 3;
+        assert(grind_logger.write_individual_session_file(id, session, events, measurements));
+    };
+    bool adjusted = true;
+    assert(grind_logger.delete_session(0, adjusted) == SessionDeleteResult::NOT_FOUND && !adjusted);
+    assert(grind_logger.delete_session(4242, adjusted) == SessionDeleteResult::NOT_FOUND);
+
+    write_result(20, GrindTerminationReason::COMPLETED, 0);
+    version = grind_logger.session_storage_version;
+    LittleFS.fail_remove = true;
+    assert(grind_logger.delete_session(20, adjusted) == SessionDeleteResult::FAILED && !adjusted);
+    assert(LittleFS.files.count("/sessions/session_20.bin"));
+    assert(statistics_manager.removed_sessions == 0 && grind_logger.session_storage_version == version);
+    LittleFS.fail_remove = false;
+    assert(grind_logger.delete_session(20, adjusted) == SessionDeleteResult::DELETED && adjusted);
+    assert(!LittleFS.files.count("/sessions/session_20.bin"));
+    assert(grind_logger.session_storage_version == version + 1);
+    assert(statistics_manager.removed_sessions == 1 && statistics_manager.removed_weight_mode);
+    assert(statistics_manager.removed_weight == 18.4f && statistics_manager.removed_error == -0.4f);
+    assert(statistics_manager.removed_pulses == 2);
+    assert(grind_logger.delete_session(20, adjusted) == SessionDeleteResult::NOT_FOUND);
+
+    write_result(21, GrindTerminationReason::MAX_PULSES, 1);
+    assert(grind_logger.delete_session(21, adjusted) == SessionDeleteResult::DELETED && adjusted);
+    assert(statistics_manager.removed_sessions == 2 && !statistics_manager.removed_weight_mode);
+
+    write_result(22, GrindTerminationReason::TIMEOUT, 0);
+    assert(grind_logger.delete_session(22, adjusted) == SessionDeleteResult::DELETED && !adjusted);
+    assert(statistics_manager.removed_sessions == 2);
+
     grind_logger.cleanup(); assert(allocations.empty());
 }
 '''

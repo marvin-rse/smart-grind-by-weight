@@ -42,6 +42,11 @@ public:
     void update_time_pulse();
     void update_uptime(uint32_t minutes_to_add);
 
+    // Reverses update_grind_session() for a session the user deleted from history.
+    // Motor runtime is kept because the motor really ran.
+    void remove_grind_session(float final_weight, float error_grams, uint8_t pulse_count,
+                              bool is_weight_mode);
+
     // Retrieval methods
     uint32_t get_total_grinds() const;
     uint32_t get_single_shots() const;

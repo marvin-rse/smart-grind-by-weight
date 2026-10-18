@@ -4,6 +4,15 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.5.9-beta.2] - 2026-10-18
+
+### Added
+- Delete a single grind from the web interface history. Its contribution is
+  also removed from the lifetime statistics; motor runtime is kept.
+
+### Fixed
+- V2 (SH8601) display no longer flashes green at power-on (from beta.1).
+
 ## [1.5.9-beta.1] - 2026-10-16
 
 ### Fixed
