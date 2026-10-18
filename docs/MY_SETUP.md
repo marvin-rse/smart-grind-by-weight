@@ -37,6 +37,10 @@ This file documents my specific build. It is based on this fork of
 - Copy of the application image: [`firmware/v1.5.9-v2/`](../firmware/v1.5.9-v2/)
 - Custom build without the green flash at power-on (untested):
   [`firmware/v1.5.9-v2-boot-fix/`](../firmware/v1.5.9-v2-boot-fix/)
+- Beta with single-grind deletion in the web history and the boot fix (untested):
+  [`firmware/v1.5.9-beta.2-v2/`](../firmware/v1.5.9-beta.2-v2/)
+- All builds are also available under [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases)
+  and in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/).
 
 The image there is the **application image** (for updates via Wi-Fi/Bluetooth:
 *System & updates → Manual firmware file*). For a full fresh install over USB,
