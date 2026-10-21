@@ -18,6 +18,10 @@ private:
     int current_profile;
     GrindMode current_grind_mode;
     Preferences* preferences;
+    // A selection made by swiping is kept in RAM and stored later, because a
+    // flash write while the tab animation runs stalls the display.
+    bool selection_save_pending_ = false;
+    uint32_t selection_changed_ms_ = 0;
 
 public:
     struct Snapshot {
@@ -32,6 +36,10 @@ public:
     void save_current_profile();
     
     void set_current_profile(int index);
+    // Stores a pending selection once it has been unchanged for
+    // SELECTION_SAVE_DELAY_MS. Called regularly from the UI task.
+    void persist_pending_selection(uint32_t now_ms);
+    static constexpr uint32_t SELECTION_SAVE_DELAY_MS = 2000;
     int get_current_profile() const { const auto lock = lock_profiles(); return current_profile; }
     float get_current_weight() const { const auto lock = lock_profiles(); return profiles[current_profile].weight; }
     float get_current_time() const { const auto lock = lock_profiles(); return profiles[current_profile].time_seconds; }

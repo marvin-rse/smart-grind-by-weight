@@ -137,6 +137,8 @@ void UIManager::create_ui() {
 void UIManager::update() {
     if (!initialized) return;
 
+    if (profile_controller) profile_controller->persist_pending_selection(millis());
+
 #ifndef SMART_GRIND_SIM
     // Execute network commands on the UI/application task, never in the
     // asynchronous TCP callback that parsed them.

@@ -54,6 +54,7 @@ void ProfileController::load_profiles() {
     if (current_profile < 0 || current_profile >= USER_PROFILE_COUNT) {
         current_profile = 1;
     }
+    selection_save_pending_ = false;
 }
 
 void ProfileController::save_profiles() {
@@ -75,9 +76,20 @@ void ProfileController::save_current_profile() {
 
 void ProfileController::set_current_profile(int index) {
     const auto lock = lock_profiles();
-    if (index >= 0 && index < USER_PROFILE_COUNT) {
-        current_profile = index;
-        save_current_profile();
+    if (index < 0 || index >= USER_PROFILE_COUNT || index == current_profile) return;
+    current_profile = index;
+    selection_save_pending_ = true;
+    selection_changed_ms_ = millis();
+}
+
+void ProfileController::persist_pending_selection(uint32_t now_ms) {
+    const auto lock = lock_profiles();
+    if (!selection_save_pending_ || !preferences) return;
+    if (now_ms - selection_changed_ms_ < SELECTION_SAVE_DELAY_MS) return;
+    if (preferences->putInt("profile", current_profile) == sizeof(int32_t)) {
+        selection_save_pending_ = false;
+    } else {
+        selection_changed_ms_ = now_ms;  // retry after another delay
     }
 }
 
@@ -150,6 +162,7 @@ bool ProfileController::apply_web_settings(int current_profile_index, GrindMode 
     }
 
     current_profile = current_profile_index;
+    selection_save_pending_ = false;  // just stored together with the settings
     current_grind_mode = mode;
     for (int i = 0; i < USER_PROFILE_COUNT; ++i) {
         profiles[i].weight = weights[i];

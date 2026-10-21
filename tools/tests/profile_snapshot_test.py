@@ -52,8 +52,33 @@ struct Preferences {
         floats[key] = value; return sizeof(float);
     }
 };
+uint32_t fake_now = 0;
+uint32_t millis() { return fake_now; }
 ''' + header + source + r'''
 int main() {
+    // Swiping only changes RAM; the selection is stored once it has been stable.
+    {
+        Preferences store; ProfileController swiping; swiping.init(&store);
+        fake_now = 1000; swiping.set_current_profile(0); swiping.set_current_profile(2);
+        assert(swiping.get_current_profile() == 2 && store.writes == 0);
+        swiping.persist_pending_selection(1000 + ProfileController::SELECTION_SAVE_DELAY_MS - 1);
+        assert(store.writes == 0);
+        swiping.persist_pending_selection(1000 + ProfileController::SELECTION_SAVE_DELAY_MS);
+        assert(store.writes == 1 && store.integers["profile"] == 2);
+        swiping.persist_pending_selection(99999); assert(store.writes == 1);
+        // A failed write is retried after another delay.
+        fake_now = 50000; swiping.set_current_profile(1); store.fail_at = 2;
+        swiping.persist_pending_selection(52000); assert(store.integers["profile"] == 2);
+        swiping.persist_pending_selection(53000); assert(store.writes == 2);
+        swiping.persist_pending_selection(54000); assert(store.integers["profile"] == 1);
+        // Saving web settings stores the selection, so nothing stays pending.
+        fake_now = 60000; swiping.set_current_profile(0);
+        const float w[] = {9, 18, 27}, t[] = {3, 6, 9};
+        assert(swiping.apply_web_settings(2, GrindMode::WEIGHT, w, t));
+        const int writes = store.writes;
+        swiping.persist_pending_selection(90000);
+        assert(store.writes == writes && store.integers["profile"] == 2);
+    }
     Preferences prefs;
     ProfileController controller; controller.init(&prefs);
     const float weights_a[] = {9, 18, 27}, times_a[] = {3, 6, 9};

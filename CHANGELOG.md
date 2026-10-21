@@ -4,6 +4,14 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.6.2] - 2026-10-21
+
+### Fixed
+- Swiping between doses no longer stutters. Every tab change wrote the profile
+  selection (and all profile values) to flash just as the snap animation
+  started, which briefly stalls the chip. The selection now changes in RAM
+  immediately and is stored once it has been stable for two seconds.
+
 ## [1.6.1] - 2026-10-21
 
 ### Changed
