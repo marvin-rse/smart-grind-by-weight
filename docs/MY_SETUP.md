@@ -39,6 +39,9 @@ This file documents my specific build. It is based on this fork of
   [`firmware/v1.5.9-v2-boot-fix/`](../firmware/v1.5.9-v2-boot-fix/)
 - Beta with single-grind deletion in the web history and the boot fix (untested):
   [`firmware/v1.5.9-beta.2-v2/`](../firmware/v1.5.9-beta.2-v2/)
+- **v1.6.0** (current): boot fix, single-grind deletion, Wi-Fi power saving
+  setting, faster web interface and a board check for manual uploads:
+  [`firmware/v1.6.0-v2/`](../firmware/v1.6.0-v2/)
 - All builds are also available under [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases)
   and in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/).
 

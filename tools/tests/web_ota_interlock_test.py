@@ -132,6 +132,14 @@ int xTaskCreate(void(*)(void*), const char* name, size_t, void* parameter, int, 
     if (std::string(name)=="github_ota") delete static_cast<String*>(parameter);
     return pdPASS;
 }
+enum class FirmwareBoard : uint8_t { UNKNOWN, V1, V2 };
+FirmwareBoard stub_image_board = FirmwareBoard::UNKNOWN;
+struct FirmwareBoardScanner {
+    void feed(const uint8_t*, size_t) {}
+    FirmwareBoard result() const { return stub_image_board; }
+};
+FirmwareBoard firmware_board_this_build() { return FirmwareBoard::V2; }
+const char* firmware_board_name(FirmwareBoard board) { return board == FirmwareBoard::V1 ? "V1" : "V2"; }
 ''' + header + state + grind_start + r'''
 DeviceWebServer device_web_server;
 void DeviceWebServer::github_ota_task(void*) {}
@@ -204,6 +212,17 @@ int main() {
         assert(!web.is_ota_active() && !web_firmware_update.opened); assert_available();
     }
     web_firmware_update.fail_begin=false; web_firmware_update.fail_write=false; web_firmware_update.valid=true;
+    // An image for the other board generation is refused and nothing is installed.
+    {
+        ready(web); AsyncWebServerRequest wrong_board;
+        stub_image_board=FirmwareBoard::V1;
+        const unsigned aborts=web_firmware_update.aborts;
+        web.handle_ota_upload(&wrong_board,"firmware.bin",0,bytes,3,true);
+        assert(wrong_board.response==409 && web_firmware_update.aborts>aborts);
+        assert(!web_firmware_update.opened && !web.is_ota_active() && !web.reboot_pending_);
+        assert_available();
+        stub_image_board=FirmwareBoard::V2; // matching image proceeds normally below
+    }
     ready(web); task_fails=true;
     assert(!web.start_github_ota("v1.5.8")); assert_available(); task_fails=false;
     ready(web); assert(web.start_github_ota("v1.5.8"));

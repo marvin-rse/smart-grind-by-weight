@@ -17,6 +17,7 @@
 #include "../system/operation_interlock.h"
 #include "device_web_server.h"
 #include "gaggimate_status_client.h"
+#include "wifi_power_policy.h"
 
 DeviceApi device_api;
 
@@ -595,6 +596,10 @@ bool DeviceApi::queue_settings_update(AsyncWebServerRequest* request) {
                                       : gaggimate_status_client.configured_host();
     strncpy(settings.gaggimate_host, gaggimate_host.c_str(), sizeof(settings.gaggimate_host) - 1);
     settings.bluetooth_startup = form_bool(value("bluetooth_startup"));
+    // Optional so pages served by older firmware keep the stored value.
+    settings.wifi_power_save = request->hasParam("wifi_power_save", true)
+                                   ? form_bool(value("wifi_power_save"))
+                                   : wifi_power_policy::power_save_enabled();
 
     bool valid = settings.current_profile >= 0 && settings.current_profile < USER_PROFILE_COUNT &&
                  settings.grind_mode >= 0 && settings.grind_mode <= 1 &&
@@ -704,6 +709,11 @@ bool DeviceApi::apply_settings(const DeviceSettingsUpdate& update) {
     saved = put_bool("screensaver", "startup", settings.screensaver_startup) && saved;
     saved = put_bool("screensaver", "sleep", settings.screensaver_sleep) && saved;
     saved = put_bool("bluetooth", "startup", settings.bluetooth_startup) && saved;
+    if (put_bool("wifi", "power_save", settings.wifi_power_save)) {
+        wifi_power_policy::set_power_save_enabled(settings.wifi_power_save);
+    } else {
+        saved = false;
+    }
 
     Preferences brightness;
     if (brightness.begin("brightness", false)) {
@@ -808,7 +818,7 @@ void DeviceApi::refresh_settings_cache() {
              "\"display_off_enabled\":%s,\"display_off_delay_s\":%u,"
              "\"screensaver_style\":\"%s\",\"has_custom_screensaver\":%s,"
              "\"gaggimate_host\":\"%s\"},"
-             "\"bluetooth_startup\":%s}",
+             "\"bluetooth_startup\":%s,\"wifi_power_save\":%s}",
              profile.current_profile,
              profile.mode == GrindMode::TIME ? "time" : "weight",
              profile.profiles[0].name, profile.profiles[0].weight, profile.profiles[0].time_seconds,
@@ -831,7 +841,8 @@ void DeviceApi::refresh_settings_cache() {
              screensaver_timing.display_off_delay_s,
              screensaver_style.c_str(), LittleFS.exists(BLE_IMAGE_FILENAME) ? "true" : "false",
              gaggimate_host.c_str(),
-             read_bool("bluetooth", "startup", true) ? "true" : "false");
+             read_bool("bluetooth", "startup", true) ? "true" : "false",
+             wifi_power_policy::power_save_enabled() ? "true" : "false");
     xSemaphoreTake(settings_mutex_, portMAX_DELAY);
     settings_json_cache_ = json;
     xSemaphoreGive(settings_mutex_);

@@ -39,6 +39,7 @@ struct DeviceSettingsUpdate {
     char screensaver_style[12] = "minimal";
     char gaggimate_host[64] = "gaggimate.local";
     bool bluetooth_startup = true;
+    bool wifi_power_save = true;
 };
 
 class DeviceApi {

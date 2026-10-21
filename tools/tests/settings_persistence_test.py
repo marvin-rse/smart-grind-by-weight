@@ -106,6 +106,11 @@ struct StatusClient {
     int calls = 0;
     bool configure(bool next_enabled, const char*) { ++calls; enabled = next_enabled; return succeed; }
 } gaggimate_status_client;
+namespace wifi_power_policy {
+bool enabled = true;
+bool power_save_enabled() { return enabled; }
+void set_power_save_enabled(bool value) { enabled = value; }
+}
 ''' + settings + r'''
 struct DeviceApi {
     HardwareManager* hardware_;
@@ -121,11 +126,12 @@ int main() {
     ProfileController profiles;
     DeviceApi api{&hw, &profiles, &control};
     DeviceSettingsUpdate update;
-    update.motor_latency_ms = 100; update.coast_ratio = 2;
+    update.motor_latency_ms = 100; update.coast_ratio = 2; update.wifi_power_save = false;
     strcpy(update.screensaver_style, "gaggimate");
     assert(api.apply_settings(update));
     const int total_writes = Preferences::writes, total_opens = Preferences::opens;
-    assert(total_writes == 16 && total_opens == 10);
+    assert(total_writes == 17 && total_opens == 11);
+    assert(!wifi_power_policy::enabled);
     assert(control.motor_response_latency_ms == 100 && control.coast_ratio_ == 2);
     // Applying a legacy form preserves the current panel-off values while
     // still using the checked persistence path.
@@ -138,13 +144,16 @@ int main() {
     for (int failure = 1; failure <= total_writes; ++failure) {
         Preferences::reset(); Preferences::fail_write = failure;
         control.motor_response_latency_ms = 50; control.coast_ratio_ = 1;
-        hw.display.brightness = 0.5f;
+        hw.display.brightness = 0.5f; wifi_power_policy::enabled = true;
         assert(!api.apply_settings(update));
         assert(Preferences::writes == total_writes);
         if (failure == 4) assert(control.coast_ratio_ == 1);
         if (failure == 5) assert(control.motor_response_latency_ms == 50);
-        if (failure == 14) assert(hw.display.brightness == 0.5f);
-        if (failure == 16) assert(gaggimate_status_client.enabled);
+        // A failed Wi-Fi power write must not change the running mode.
+        if (failure == 14) assert(wifi_power_policy::enabled);
+        if (failure != 14) assert(!wifi_power_policy::enabled);
+        if (failure == 15) assert(hw.display.brightness == 0.5f);
+        if (failure == 17) assert(gaggimate_status_client.enabled);
     }
     for (int failure = 1; failure <= total_opens; ++failure) {
         Preferences::reset(); Preferences::fail_open = failure;

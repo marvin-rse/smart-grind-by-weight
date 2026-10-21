@@ -75,6 +75,9 @@ jobs:
       - name: Test embedded firmware update feedback
         run: node tools/tests/ota_web_test.mjs
 
+      - name: Test embedded firmware upload checks
+        run: node tools/tests/firmware_upload_web_test.mjs
+
       - name: Build firmware
         env:
           PLATFORMIO_BUILD_CACHE_DIR: .pio/build-cache/${{ matrix.environment }}

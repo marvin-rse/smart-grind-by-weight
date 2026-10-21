@@ -8,6 +8,7 @@
 #include "../config/build_info.h"
 #include "../config/constants.h"
 #include "device_page.h"
+#include "device_page_gz.h"
 #include "network_manager.h"
 
 namespace {
@@ -43,6 +44,32 @@ document.getElementById('wifiForm').onsubmit=e=>{const ssid=(manual.value.trim()
 loadNetworks();
 </script></body></html>
 )HTML";
+
+bool client_accepts_gzip(AsyncWebServerRequest* request) {
+    if (!request->hasHeader("Accept-Encoding")) return false;
+    return request->getHeader("Accept-Encoding")->value().indexOf("gzip") >= 0;
+}
+
+// Serves the compressed page with a content-hash ETag. Browsers keep a copy
+// and revalidate it on each visit; an unchanged page costs a tiny 304 reply.
+void send_compressed_device_page(AsyncWebServerRequest* request) {
+    if (request->hasHeader("If-None-Match") &&
+        request->getHeader("If-None-Match")->value() == SMART_GRIND_DEVICE_PAGE_ETAG) {
+        AsyncWebServerResponse* response = request->beginResponse(304);
+        response->addHeader("ETag", SMART_GRIND_DEVICE_PAGE_ETAG);
+        response->addHeader("Cache-Control", "no-cache");
+        response->addHeader("Vary", "Accept-Encoding");
+        request->send(response);
+        return;
+    }
+    AsyncWebServerResponse* response = request->beginResponse(
+        200, "text/html", SMART_GRIND_DEVICE_PAGE_GZ, SMART_GRIND_DEVICE_PAGE_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("ETag", SMART_GRIND_DEVICE_PAGE_ETAG);
+    response->addHeader("Cache-Control", "no-cache");
+    response->addHeader("Vary", "Accept-Encoding");
+    request->send(response);
+}
 
 void redirect_to_setup_page(AsyncWebServerRequest* request) {
     const String location = "http://" + WiFi.softAPIP().toString() + "/";
@@ -101,6 +128,11 @@ void ProvisioningService::update() {
 
 void ProvisioningService::configure_routes() {
     server_->on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (network_manager.state() != NetworkState::WIFI_SETUP_AP &&
+            client_accepts_gzip(request)) {
+            send_compressed_device_page(request);
+            return;
+        }
         const char* page = network_manager.state() == NetworkState::WIFI_SETUP_AP
                                ? SETUP_PAGE
                                : SMART_GRIND_DEVICE_PAGE;

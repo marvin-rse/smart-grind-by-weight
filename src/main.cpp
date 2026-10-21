@@ -19,6 +19,7 @@
 #include "network/network_manager.h"
 #include "network/provisioning_service.h"
 #include "network/device_web_server.h"
+#include "network/firmware_board_check.h"
 #include "network/gaggimate_status_client.h"
 
 HardwareManager hardware_manager;
@@ -104,6 +105,7 @@ void setup() {
     
     // Early startup heartbeat - helps capture initialization sequence
     LOG_BLE("[STARTUP] Initializing ESP32-S3 Coffee Scale - Build %d - Core1 active\n", BUILD_NUMBER);
+    LOG_BLE("[STARTUP] Firmware image %s\n", firmware_board_marker());
     
     // Initialize LittleFS once - format if necessary
     if (!LittleFS.begin(true)) {

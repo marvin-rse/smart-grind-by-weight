@@ -23,6 +23,7 @@
 #include "../logging/diagnostic_log.h"
 #include "network_manager.h"
 #include "device_api.h"
+#include "firmware_board_check.h"
 #include "ota_stream.h"
 
 namespace {
@@ -99,6 +100,7 @@ struct OtaRequestState {
     bool success;
     bool complete;
     OperationInterlock::Token token;
+    FirmwareBoardScanner board_scanner;
 };
 
 struct ScreensaverUploadState {
@@ -1012,9 +1014,23 @@ void DeviceWebServer::handle_ota_upload(AsyncWebServerRequest* request, const St
         return;
     }
     ota_received_.fetch_add(len);
+    state->board_scanner.feed(data, len);
 
     if (final) {
         state->complete = true;
+        const FirmwareBoard image_board = state->board_scanner.result();
+        const FirmwareBoard own_board = firmware_board_this_build();
+        if (image_board != FirmwareBoard::UNKNOWN && image_board != own_board) {
+            LOG_BLE("[WEB OTA] Rejected %s image on %s hardware\n",
+                    firmware_board_name(image_board), firmware_board_name(own_board));
+            state->success = false;
+            finish_ota(false);
+            request->send(409, "text/plain",
+                          own_board == FirmwareBoard::V2
+                              ? "This firmware is for V1 boards; this grinder needs a -waveshare-164-v2 image"
+                              : "This firmware is for V2 boards; this grinder needs the V1 image");
+            return;
+        }
         state->success = web_firmware_update.end(true);
         if (!state->success) {
             LOG_BLE("[WEB OTA] Image validation failed: %s\n", web_firmware_update.errorString());

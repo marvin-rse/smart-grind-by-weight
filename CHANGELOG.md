@@ -4,16 +4,23 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
-## [1.5.9-beta.2] - 2026-10-18
+## [1.6.0] - 2026-10-21
 
 ### Added
 - Delete a single grind from the web interface history. Its contribution is
   also removed from the lifetime statistics; motor runtime is kept.
+- Wi-Fi power saving setting (Settings → Connectivity). Turning it off makes the
+  web interface noticeably more responsive; it stays on while Bluetooth is
+  active because coexistence requires it.
 
-### Fixed
-- V2 (SH8601) display no longer flashes green at power-on (from beta.1).
-
-## [1.5.9-beta.1] - 2026-10-16
+### Changed
+- The web interface is served gzip-compressed (about 16 KB instead of 56 KB)
+  with a content-hash ETag, so browsers reuse their copy and only revalidate.
+- Manual firmware uploads refuse images built for the other board generation,
+  both in the browser before uploading and on the grinder before installing.
+  Firmware images now carry an explicit board marker.
+- After a manual upload the page waits for the restart and reports the build
+  that is now running instead of showing a connection error.
 
 ### Fixed
 - V2 (SH8601) display no longer flashes green at power-on. The backlight stays

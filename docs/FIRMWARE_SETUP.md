@@ -52,10 +52,22 @@ Before flashing, verify that the selected image matches the display generation. 
      and restarts; keep it powered until the update completes
    - Manual `.bin` upload from the
      [Community releases page](https://github.com/Clinteastman/smart-grind-by-weight/releases)
-     remains available as an advanced fallback
+     remains available as an advanced fallback. Use the application image:
+     `smart-grind-by-weight-vX.Y.Z-waveshare-164-v2.bin` for V2 or
+     `smart-grind-by-weight-vX.Y.Z.bin` for V1, never the `-web-ota`,
+     `-bootloader` or `-partitions` files. An image for the other board
+     generation is refused before it is installed. After the upload the page
+     waits for the restart and confirms the build now running, so a dropped
+     connection during the restart is no longer reported as a failure.
 
    BLE updating remains available as a fallback when the grinder cannot join
    the local Wi-Fi network.
+
+   **Wi-Fi power saving** (Settings → Connectivity, on by default) lets the
+   radio doze between router beacons, which makes the web interface noticeably
+   slower. Turn it off for a faster interface; the change applies immediately.
+   Power saving is always used while Bluetooth is active because Wi-Fi and
+   Bluetooth coexistence requires it.
 
 **Key Benefits:**
 - ✅ **No downloads needed** - firmware hosted automatically

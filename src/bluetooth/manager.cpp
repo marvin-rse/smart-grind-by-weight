@@ -20,6 +20,7 @@
 #include "../hardware/WeightSensor.h"
 #include "../controllers/grind_controller.h"
 #include "../network/device_web_server.h"
+#include "../network/wifi_power_policy.h"
 
 extern HardwareManager hardware_manager;
 extern GrindController grind_controller;
@@ -124,6 +125,9 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
     enable_time = millis();
     last_disconnect_time = enable_time; // Start disconnected timeout from enable time
     
+    // Wi-Fi/BLE coexistence requires modem sleep before the stack starts.
+    wifi_power_policy::bluetooth_starting();
+
     // Initialize BLE with delays for power stability
     BLEDevice::init(BLE_DEVICE_NAME);
     
@@ -346,6 +350,7 @@ void BluetoothManager::disable() {
     
     // Restore normal power settings
     ota_handler.restore_normal_power_mode();
+    wifi_power_policy::bluetooth_stopped();
     log("Bluetooth: Disable complete\n");
 }
 

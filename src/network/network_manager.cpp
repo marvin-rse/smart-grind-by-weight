@@ -6,6 +6,7 @@
 
 #include "../config/build_info.h"
 #include "../config/constants.h"
+#include "wifi_power_policy.h"
 
 SmartGrindNetworkManager network_manager;
 
@@ -13,6 +14,7 @@ void SmartGrindNetworkManager::init(Preferences* preferences) {
     preferences_ = preferences;
     if (!settings_mutex_) settings_mutex_ = xSemaphoreCreateMutex();
     load_settings();
+    wifi_power_policy::init();
     initialized_.store(true);
 
     if (!enabled_.load()) {
@@ -34,6 +36,7 @@ void SmartGrindNetworkManager::update() {
     const wl_status_t wifi_status = WiFi.status();
     if (wifi_status == WL_CONNECTED) {
         if (state() != NetworkState::WIFI_CONNECTED) handle_connected();
+        wifi_power_policy::update(true);
         return;
     }
 
