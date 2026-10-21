@@ -7,6 +7,7 @@
 #include <Arduino_GFX_Library.h>
 #endif
 #include <lvgl.h>
+#include <atomic>
 #include "touch_driver.h"
 #include "../config/constants.h"
 
@@ -35,6 +36,17 @@ private:
     bool startup_frame_presented = false;
     float deferred_brightness = -1.0f;
     uint32_t startup_blank_started_ms = 0;
+    // Staged flush: LVGL renders whole frames into PSRAM and the flush copies
+    // them strip by strip into two small internal DMA buffers in turn, so one
+    // strip transfers while the next is copied. Falls back to rendering
+    // straight into a single DMA buffer when memory is short.
+    bool staged_flush = false;
+    uint16_t* dma_strips[2] = {nullptr, nullptr};
+    uint32_t dma_strip_rows = 0;
+    lv_color_t* draw_buffer2 = nullptr;
+    std::atomic<uint32_t> transfers_expected{0};
+    std::atomic<uint32_t> transfers_done{0};
+    SemaphoreHandle_t transfer_done_signal = nullptr;
 #else
     Arduino_DataBus* bus;
     Arduino_GFX* gfx_device;
@@ -91,6 +103,9 @@ private:
     bool filter_touch_for_panel_wake(const TouchData& touch);
     static uint32_t millis_cb();
 #if HW_DISPLAY_VARIANT_V2
+    bool allocate_v2_buffers();
+    bool queue_v2_transfer(int32_t x1, int32_t y1, int32_t x2, int32_t y2, const void* pixels);
+    bool wait_for_v2_transfers(uint32_t count);
     void apply_brightness(float brightness);
     void present_startup_frame_if_ready();
 #endif

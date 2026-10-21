@@ -59,7 +59,7 @@ python3 tools/grinder.py diagnostics --save diagnostic-report.txt
 ## Analytics and data export
 
 Grind session logging is enabled by default. Open `http://smartgrind.local` and
-choose **History** to inspect the latest 10 sessions, including accuracy,
+choose **History** to inspect the latest 50 sessions, including accuracy,
 consistency, weight and flow graphs. Download any session as CSV, JSON or its
 original raw record directly in the browser.
 

@@ -4,6 +4,20 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.6.1] - 2026-10-21
+
+### Changed
+- Smoother V2 display, especially when swiping between doses: LVGL now renders
+  whole frames into PSRAM once instead of the screen in 57 eight-row passes,
+  and the flush streams them through two small DMA strips in turn. Internal RAM
+  use stays almost unchanged; without enough memory the previous path is used.
+- Firmware updates are offered from this fork (marvin-rse/smart-grind-by-weight)
+  instead of the upstream community project, so installing an update keeps the
+  fork's features.
+- The grind history keeps the latest 50 sessions (previously 10), limited to
+  1.5 MB so long grinds cannot fill the filesystem.
+- CI runners are pinned to Ubuntu 24.04.
+
 ## [1.6.0] - 2026-10-21
 
 ### Added

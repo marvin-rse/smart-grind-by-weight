@@ -25,7 +25,10 @@ class Grinder;
 // Flash storage settings
 #define GRIND_SESSIONS_DIR "/sessions"                      // Directory for individual session files
 #define SESSION_FILE_FORMAT "/sessions/session_%lu.bin"    // Individual session file naming format
-#define MAX_STORED_SESSIONS_FLASH 10                        // Maximum sessions to keep in flash (configurable)
+#define MAX_STORED_SESSIONS_FLASH 50                        // Maximum sessions to keep in flash (configurable)
+// Byte budget for stored sessions. A typical dose is ~11 KB, but a 60 s grind
+// can reach ~75 KB, so the count limit alone could fill the 3 MB filesystem.
+#define MAX_SESSION_STORAGE_BYTES (1536UL * 1024UL)
 
 #pragma pack(push, 1)
 
@@ -235,6 +238,7 @@ private:
     void mark_session_storage_dirty(); // Bump version when session files change
     
     uint32_t session_storage_version;
+    size_t session_storage_budget_bytes = MAX_SESSION_STORAGE_BYTES;
     
 };
 

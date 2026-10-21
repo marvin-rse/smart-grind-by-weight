@@ -8,11 +8,10 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_heap_caps.h>
-#if HW_DISPLAY_VARIANT_V2
-#include <driver/spi_master.h>
-#else
 #include <algorithm>
 #include <cstring>
+#if HW_DISPLAY_VARIANT_V2
+#include <driver/spi_master.h>
 #endif
 
 DisplayManager* g_display_manager = nullptr;
@@ -40,6 +39,12 @@ static const sh8601_lcd_init_cmd_t kV2InitCommands[] = {
 
 // Fallback so a missing first frame can never leave the screen dark forever.
 constexpr uint32_t kStartupBlankTimeoutMs = 3000;
+
+// Height of each internal DMA strip: 280 * 8 * 2 = 4,480 bytes. Two strips are
+// used in turn, so internal RAM use stays small for Wi-Fi updates and the UI task.
+constexpr uint32_t kDmaStripRows = 8;
+// Longest wait for the panel to accept a strip before a flush is abandoned.
+constexpr uint32_t kTransferTimeoutMs = 250;
 }
 #endif
 
@@ -121,13 +126,11 @@ void DisplayManager::init() {
     // RGB565 format (16bit per pixel)
     draw_buffer = nullptr;
 #if HW_DISPLAY_VARIANT_V2
-    // Keep the DMA-capable buffer small enough to leave internal RAM for the UI
-    // FreeRTOS task. LVGL splits larger invalidated areas into strips.
-    const size_t draw_rows = 8; // 280 * 8 * 2 = 4,480 bytes
-    buffer_size = screen_width * draw_rows * sizeof(uint16_t);
-    draw_buffer = static_cast<lv_color_t*>(
-        heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, buffer_size,
-                                MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
+    transfer_done_signal = xSemaphoreCreateBinary();
+    if (!transfer_done_signal || !allocate_v2_buffers()) {
+        LOG_BLE("[DISPLAY] ERROR: Failed to allocate V2 display buffers\n");
+        return;
+    }
 #else
     dma_staging_buffer = nullptr;
     dma_staging_rows = 16;
@@ -174,8 +177,13 @@ void DisplayManager::init() {
 
     lvgl_display = lv_display_create(screen_width, screen_height);
     lv_display_set_flush_cb(lvgl_display, display_flush_cb);
+#if HW_DISPLAY_VARIANT_V2
+    lv_display_set_buffers(lvgl_display, draw_buffer, draw_buffer2,
+                          buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+#else
     lv_display_set_buffers(lvgl_display, draw_buffer, NULL,
                           buffer_size , LV_DISPLAY_RENDER_MODE_PARTIAL);
+#endif
 
     lv_display_add_event_cb(lvgl_display, display_rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     lv_display_add_event_cb(lvgl_display, display_metrics_cb, LV_EVENT_ALL, NULL);
@@ -333,21 +341,63 @@ void DisplayManager::display_metrics_cb(lv_event_t* e) {
 
 void DisplayManager::display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
 #if HW_DISPLAY_VARIANT_V2
-    if (!g_display_manager || !g_display_manager->panel_handle) {
+    DisplayManager* manager = g_display_manager;
+    if (!manager || !manager->panel_handle) {
         lv_display_flush_ready(disp);
         return;
     }
 
-    g_display_manager->pending_flush_display = disp;
-    esp_err_t result = esp_lcd_panel_draw_bitmap(
-        g_display_manager->panel_handle,
-        area->x1 + HW_DISPLAY_OFFSET_X_PX, area->y1,
-        area->x2 + HW_DISPLAY_OFFSET_X_PX + 1, area->y2 + 1,
-        px_map);
-    if (result != ESP_OK) {
-        g_display_manager->pending_flush_display = nullptr;
+    const uint32_t flush_started_us = micros();
+    const int32_t x1 = area->x1 + HW_DISPLAY_OFFSET_X_PX;
+    const int32_t x2 = area->x2 + HW_DISPLAY_OFFSET_X_PX + 1;
+    const uint32_t width = lv_area_get_width(area);
+    const uint32_t height = lv_area_get_height(area);
+    const uint32_t strip_rows = manager->staged_flush ? manager->dma_strip_rows : height;
+    const uint32_t strips = (height + strip_rows - 1) / strip_rows;
+
+    // The transfer-complete interrupt reports the flush to LVGL once the last
+    // strip has been sent.
+    manager->transfers_done.store(0);
+    manager->transfers_expected.store(strips);
+    manager->pending_flush_display = disp;
+
+    uint32_t queued = 0;
+    bool ok = true;
+    if (!manager->staged_flush) {
+        ok = manager->queue_v2_transfer(x1, area->y1, x2, area->y2 + 1, px_map);
+        queued = ok ? 1 : 0;
+    } else {
+        const uint16_t* source = reinterpret_cast<const uint16_t*>(px_map);
+        for (uint32_t strip = 0; strip < strips; ++strip) {
+            // Strip buffer (strip % 2) was last used two strips ago.
+            if (strip >= 2 && !manager->wait_for_v2_transfers(strip - 1)) {
+                ok = false;
+                break;
+            }
+            const uint32_t first_row = strip * strip_rows;
+            const uint32_t rows = std::min(strip_rows, height - first_row);
+            uint16_t* buffer = manager->dma_strips[strip & 1];
+            memcpy(buffer, source + static_cast<size_t>(first_row) * width,
+                   static_cast<size_t>(rows) * width * sizeof(uint16_t));
+            if (!manager->queue_v2_transfer(x1, area->y1 + first_row, x2,
+                                            area->y1 + first_row + rows, buffer)) {
+                ok = false;
+                break;
+            }
+            ++queued;
+        }
+    }
+
+    if (!ok) {
+        // Never leave LVGL waiting for strips that were not queued.
+        manager->pending_flush_display = nullptr;
+        manager->wait_for_v2_transfers(queued);
         lv_display_flush_ready(disp);
     }
+
+    manager->metrics_window.flushes++;
+    manager->metrics_window.pixels += width * height;
+    manager->metrics_window.flush_time_us += micros() - flush_started_us;
 #else
     if (!g_display_manager || !g_display_manager->gfx_device) return;
 
@@ -401,12 +451,74 @@ bool DisplayManager::color_transfer_done_cb(esp_lcd_panel_io_handle_t,
                                             esp_lcd_panel_io_event_data_t*,
                                             void* user_context) {
     DisplayManager* manager = static_cast<DisplayManager*>(user_context);
-    if (manager && manager->pending_flush_display) {
-        lv_display_t* display = manager->pending_flush_display;
+    if (!manager) return false;
+    BaseType_t woken = pdFALSE;
+    const uint32_t done = manager->transfers_done.fetch_add(1) + 1;
+    if (manager->transfer_done_signal) {
+        xSemaphoreGiveFromISR(manager->transfer_done_signal, &woken);
+    }
+    lv_display_t* display = manager->pending_flush_display;
+    if (display && done >= manager->transfers_expected.load()) {
         manager->pending_flush_display = nullptr;
         lv_display_flush_ready(display);
     }
-    return false;
+    return woken == pdTRUE;
+}
+
+bool DisplayManager::allocate_v2_buffers() {
+    const size_t strip_bytes = screen_width * kDmaStripRows * sizeof(uint16_t);
+    const size_t frame_bytes = screen_width * screen_height * sizeof(uint16_t);
+    for (uint16_t*& strip : dma_strips) {
+        strip = static_cast<uint16_t*>(heap_caps_aligned_alloc(
+            LV_DRAW_BUF_ALIGN, strip_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
+    }
+    auto* frame_a = static_cast<lv_color_t*>(
+        heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, frame_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    auto* frame_b = static_cast<lv_color_t*>(
+        heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, frame_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+
+    if (dma_strips[0] && dma_strips[1] && frame_a && frame_b) {
+        staged_flush = true;
+        dma_strip_rows = kDmaStripRows;
+        draw_buffer = frame_a;
+        draw_buffer2 = frame_b;
+        buffer_size = frame_bytes;
+        LOG_BLE("[DISPLAY] V2 staged flush: 2 PSRAM frames, 2 x %lu-row DMA strips\n",
+                static_cast<unsigned long>(kDmaStripRows));
+        return true;
+    }
+
+    // Previous behaviour: LVGL renders straight into one small DMA buffer.
+    if (frame_a) heap_caps_free(frame_a);
+    if (frame_b) heap_caps_free(frame_b);
+    if (dma_strips[1]) heap_caps_free(dma_strips[1]);
+    dma_strips[1] = nullptr;
+    staged_flush = false;
+    if (!dma_strips[0]) return false;
+    draw_buffer = reinterpret_cast<lv_color_t*>(dma_strips[0]);
+    draw_buffer2 = nullptr;
+    buffer_size = strip_bytes;
+    LOG_BLE("[DISPLAY] V2 direct flush fallback (%lu-row buffer)\n",
+            static_cast<unsigned long>(kDmaStripRows));
+    return true;
+}
+
+bool DisplayManager::queue_v2_transfer(int32_t x1, int32_t y1, int32_t x2, int32_t y2,
+                                       const void* pixels) {
+    return esp_lcd_panel_draw_bitmap(panel_handle, x1, y1, x2, y2, pixels) == ESP_OK;
+}
+
+bool DisplayManager::wait_for_v2_transfers(uint32_t count) {
+    const uint32_t started_ms = millis();
+    while (transfers_done.load() < count) {
+        if (millis() - started_ms >= kTransferTimeoutMs) {
+            LOG_BLE("[DISPLAY] Timed out waiting for panel transfer %lu\n",
+                    static_cast<unsigned long>(count));
+            return false;
+        }
+        xSemaphoreTake(transfer_done_signal, pdMS_TO_TICKS(10));
+    }
+    return true;
 }
 #endif
 

@@ -1079,58 +1079,73 @@ void GrindLogger::cleanup_old_session_files() {
         return;
     }
 
-    // Step 1: Count files and collect session IDs
+    // Step 1: Count session files and their total size
     uint32_t session_count = 0;
+    size_t total_bytes = 0;
     File file = dir.openNextFile();
     while (file) {
         uint32_t id = 0;
-        if (!file.isDirectory() && parse_session_filename(file.name(), id)) session_count++;
+        if (!file.isDirectory() && parse_session_filename(file.name(), id)) {
+            session_count++;
+            total_bytes += file.size();
+        }
         file = dir.openNextFile();
     }
     dir.close(); // Close after counting
 
-    if (session_count <= MAX_STORED_SESSIONS_FLASH) {
+    if (session_count <= MAX_STORED_SESSIONS_FLASH && total_bytes <= session_storage_budget_bytes) {
         return; // No cleanup needed
     }
 
-    LOG_BLE("Session count (%lu) exceeds limit (%d). Cleaning up old files...\n", session_count, MAX_STORED_SESSIONS_FLASH);
+    LOG_BLE("Sessions (%lu, %lu bytes) exceed limits (%d, %lu bytes). Cleaning up old files...\n",
+            static_cast<unsigned long>(session_count), static_cast<unsigned long>(total_bytes),
+            MAX_STORED_SESSIONS_FLASH, static_cast<unsigned long>(session_storage_budget_bytes));
 
-    // Step 2: Create a list of session IDs
-    uint32_t* session_ids = (uint32_t*)malloc(session_count * sizeof(uint32_t));
-    if (!session_ids) {
+    // Step 2: Collect session IDs with their file sizes
+    struct StoredSession {
+        uint32_t id;
+        size_t bytes;
+    };
+    StoredSession* sessions = static_cast<StoredSession*>(malloc(session_count * sizeof(StoredSession)));
+    if (!sessions) {
         LOG_BLE("ERROR: Failed to allocate memory for session ID list during cleanup.\n");
         return;
     }
 
     dir = LittleFS.open(GRIND_SESSIONS_DIR);
     if (!dir || !dir.isDirectory()) {
-        free(session_ids);
+        free(sessions);
         return;
     }
     uint32_t list_idx = 0;
+    size_t listed_bytes = 0;
     file = dir.openNextFile();
     while (file && list_idx < session_count) {
         uint32_t id = 0;
         if (!file.isDirectory() && parse_session_filename(file.name(), id)) {
-            session_ids[list_idx++] = id;
+            sessions[list_idx++] = {id, file.size()};
+            listed_bytes += file.size();
         }
         file = dir.openNextFile();
     }
     dir.close();
 
-    // Step 3: Sort the session IDs in ascending order
-    std::sort(session_ids, session_ids + list_idx);
+    // Step 3: Sort oldest first
+    std::sort(sessions, sessions + list_idx,
+              [](const StoredSession& a, const StoredSession& b) { return a.id < b.id; });
 
-    // Step 4: Remove the oldest files
-    const uint32_t files_to_remove = list_idx > MAX_STORED_SESSIONS_FLASH
-        ? list_idx - MAX_STORED_SESSIONS_FLASH : 0;
+    // Step 4: Remove the oldest files until both limits hold; never the newest.
+    uint32_t remaining = list_idx;
     uint32_t files_removed = 0;
-    for (uint32_t i = 0; i < files_to_remove; i++) {
-        if (remove_session_file(session_ids[i])) files_removed++;
+    for (uint32_t i = 0; i + 1 < list_idx; i++) {
+        if (remaining <= MAX_STORED_SESSIONS_FLASH && listed_bytes <= session_storage_budget_bytes) break;
+        if (remove_session_file(sessions[i].id)) files_removed++;
+        remaining--;
+        listed_bytes = listed_bytes > sessions[i].bytes ? listed_bytes - sessions[i].bytes : 0;
     }
 
-    free(session_ids);
-    LOG_BLE("Cleanup complete. Removed %lu old session(s).\n", files_removed);
+    free(sessions);
+    LOG_BLE("Cleanup complete. Removed %lu old session(s).\n", static_cast<unsigned long>(files_removed));
     if (files_removed > 0) {
         mark_session_storage_dirty();
     }

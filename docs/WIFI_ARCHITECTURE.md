@@ -169,7 +169,7 @@ original precision; completed graphs are replaced with the full recorded trace.
   on the normal UI task. It is refused while grinding.
 - `POST /api/v1/profile`: selects Single, Double or Custom while idle, persists
   the selection and keeps the touchscreen and dashboard target in sync.
-- `GET /api/v1/history`: validated summaries for the latest 10 stored sessions.
+- `GET /api/v1/history`: validated summaries for the latest 50 stored sessions (1.5 MB budget).
 - `GET /api/v1/history/session?id=N`: the checksum-validated raw session used by
   the browser for graphs and CSV/JSON downloads.
 - `GET /api/v1/logs`: the latest 4 KiB of boot and runtime messages retained in

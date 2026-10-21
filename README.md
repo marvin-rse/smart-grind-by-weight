@@ -134,7 +134,7 @@ screen.
 <img src="media/web-ui-settings.png" alt="Smart Grind web settings for profiles and grind behaviour" width="75%">
 </p>
 
-The grinder retains the latest 10 logged sessions with accuracy, consistency,
+The grinder retains the latest 50 logged sessions (up to 1.5 MB) with accuracy, consistency,
 weight and flow data. Each session can be downloaded as CSV, JSON or its
 original raw record. BLE export and the Python analysis tools remain available
 for longer-term archives and recovery workflows.

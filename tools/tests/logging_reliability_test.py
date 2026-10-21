@@ -283,13 +283,14 @@ int main() {
     assert(exported == original && actual == 0);
 
     // Retention ignores unrelated entries and sorts only initialized IDs.
-    for (uint32_t i = 2; i <= 12; ++i) write_session(i);
+    const uint32_t newest = MAX_STORED_SESSIONS_FLASH + 2;
+    for (uint32_t i = 2; i <= newest; ++i) write_session(i);
     std::vector<std::shared_ptr<Node>> entries;
     for (auto& pair : LittleFS.files) entries.push_back(pair.second);
     entries.push_back(malformed);
     auto directory = std::make_shared<Node>(); directory->name = "session_99.bin"; directory->directory = true;
     entries.push_back(directory);
-    LittleFS.directory_reads = {entries, {file(12)}}; LittleFS.directory_read = 0;
+    LittleFS.directory_reads = {entries, {file(newest)}}; LittleFS.directory_read = 0;
     LittleFS.removed.clear();
     grind_logger.cleanup_old_session_files();
     assert(LittleFS.removed.empty()); // directory shrank between count and collect
@@ -304,6 +305,21 @@ int main() {
     assert(LittleFS.removed[0] == "/sessions/session_1.bin");
     assert(LittleFS.removed[1] == "/sessions/session_2.bin");
     assert(grind_logger.session_storage_version == version + 1);
+
+    // The byte budget also trims the oldest sessions, but never the newest one.
+    LittleFS.directory_reads.clear();
+    const size_t session_bytes = file(newest)->bytes.size();
+    grind_logger.session_storage_budget_bytes = session_bytes * 5;
+    LittleFS.removed.clear();
+    grind_logger.cleanup_old_session_files();
+    assert(LittleFS.removed.size() == MAX_STORED_SESSIONS_FLASH - 5);
+    assert(LittleFS.removed[0] == "/sessions/session_3.bin");
+    assert(LittleFS.files.size() == 5 && LittleFS.files.count("/sessions/session_" + std::to_string(newest) + ".bin"));
+    grind_logger.session_storage_budget_bytes = 0;
+    LittleFS.removed.clear();
+    grind_logger.cleanup_old_session_files();
+    assert(LittleFS.files.size() == 1 && LittleFS.removed.size() == 4);
+    grind_logger.session_storage_budget_bytes = MAX_SESSION_STORAGE_BYTES;
 
     // Deleting one history entry removes its file and, for counted grinds only,
     // its contribution to lifetime statistics.
