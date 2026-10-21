@@ -14,6 +14,7 @@ enum class OtaPreparationState : uint8_t {
     IDLE,
     REQUESTED,
     READY,
+    RESTARTING,  // restarting without Bluetooth before the update
 };
 
 enum class FirmwareUpdateState : uint8_t {
@@ -33,7 +34,11 @@ public:
     bool is_ota_active() const { return ota_active_.load() || reboot_pending_.load(); }
     bool is_ota_ready() const;
     bool is_ota_preparing() const {
-        return ota_preparation_state_.load() == OtaPreparationState::REQUESTED;
+        const OtaPreparationState state = ota_preparation_state_.load();
+        return state == OtaPreparationState::REQUESTED || state == OtaPreparationState::RESTARTING;
+    }
+    bool is_ota_restarting() const {
+        return ota_preparation_state_.load() == OtaPreparationState::RESTARTING;
     }
     uint8_t ota_progress_percent() const;
     bool ota_failed() const { return ota_failed_.load(); }
@@ -63,6 +68,8 @@ private:
     std::atomic<FirmwareUpdateState> firmware_update_state_{FirmwareUpdateState::UNKNOWN};
     std::atomic<bool> firmware_update_check_active_{false};
     std::atomic<bool> on_device_update_pending_{false};
+    // Continue an on-device update after the restart without Bluetooth.
+    bool resume_device_update_ = false;
     std::atomic<uint16_t> latest_version_major_{0};
     std::atomic<uint16_t> latest_version_minor_{0};
     std::atomic<uint16_t> latest_version_patch_{0};

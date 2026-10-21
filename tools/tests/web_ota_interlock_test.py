@@ -26,6 +26,7 @@ class WebOtaInterlockTest(unittest.TestCase):
             "void DeviceWebServer::finish_ota(",
             "void DeviceWebServer::handle_ota_upload(",
             "bool DeviceWebServer::start_github_ota(",
+            "bool DeviceWebServer::install_available_update()",
             "void DeviceWebServer::update()",
         ))
         state = re.search(r"struct OtaRequestState \{.*?\};", source, re.S).group()
@@ -139,6 +140,10 @@ struct FirmwareBoardScanner {
     FirmwareBoard result() const { return stub_image_board; }
 };
 FirmwareBoard firmware_board_this_build() { return FirmwareBoard::V2; }
+namespace boot_intent {
+int restart_requests = 0; bool last_resume = false;
+void request_update_restart(bool resume_device_update) { ++restart_requests; last_resume = resume_device_update; }
+}
 const char* firmware_board_name(FirmwareBoard board) { return board == FirmwareBoard::V1 ? "V1" : "V2"; }
 ''' + header + state + grind_start + r'''
 DeviceWebServer device_web_server;
@@ -234,12 +239,44 @@ int main() {
     assert(!web.request_ota_preparation());
     now += OTA_REBOOT_DELAY_MS; web.update(); assert(ESP.restarts==1);
     operation_interlock().release(web.operation_token_); // Simulate boot, never used by production.
-    // Bluetooth deinit recovery retains ownership until reboot too.
-    DeviceWebServer recovery; setup(recovery); bluetooth.enabled=true;
-    ready(recovery); now += OTA_READY_WINDOW_MS; recovery.update();
-    assert(recovery.reboot_pending_ && recovery.is_ota_active());
-    assert(!operation_interlock().try_acquire() && !recovery.request_ota_preparation());
-    operation_interlock().release(recovery.operation_token_);
+    // With Bluetooth active the grinder restarts without it instead of stopping
+    // Bluetooth in the running system, and keeps the interlock until it restarts.
+    DeviceWebServer restarting; setup(restarting); bluetooth.enabled=true;
+    const unsigned restarts_before=ESP.restarts;
+    assert(restarting.request_ota_preparation());
+    restarting.update();
+    assert(restarting.is_ota_restarting() && restarting.is_ota_preparing() && !restarting.is_ota_ready());
+    assert(boot_intent::restart_requests==1 && !boot_intent::last_resume);
+    assert(bluetooth.enabled && !restarting.ota_bluetooth_stopped_);
+    assert(!operation_interlock().try_acquire() && !restarting.request_ota_preparation());
+    assert(!restarting.start_github_ota("v1.5.8"));
+    now += OTA_REBOOT_DELAY_MS; restarting.update(); assert(ESP.restarts==restarts_before+1);
+    operation_interlock().release(restarting.operation_token_); // Simulate boot.
+    // An update started on the grinder asks to be resumed after the restart.
+    DeviceWebServer on_device; setup(on_device);
+    on_device.firmware_update_state_.store(FirmwareUpdateState::AVAILABLE);
+    assert(on_device.install_available_update());
+    on_device.update();
+    assert(on_device.is_ota_restarting() && boot_intent::restart_requests==2 && boot_intent::last_resume);
+    assert(!on_device.on_device_update_pending_);
+    now += OTA_REBOOT_DELAY_MS; on_device.update();
+    operation_interlock().release(on_device.operation_token_); // Simulate boot.
+    // After the restart (Bluetooth off) the on-device update continues once the
+    // release check has run, and prepares without another restart.
+    bluetooth.enabled=false;
+    DeviceWebServer resumed; setup(resumed); resumed.resume_device_update_=true;
+    resumed.firmware_update_state_.store(FirmwareUpdateState::AVAILABLE);
+    resumed.update();
+    assert(!resumed.resume_device_update_ && resumed.on_device_update_pending_ && resumed.is_ota_preparing());
+    resumed.update();
+    // Prepared without another restart, and the GitHub download has started.
+    assert(boot_intent::restart_requests==2 && resumed.is_ota_active() && !resumed.on_device_update_pending_);
+    resumed.finish_ota(false); assert_available();
+    // Nothing to resume when the check found no newer release.
+    DeviceWebServer nothing; setup(nothing); nothing.resume_device_update_=true;
+    nothing.firmware_update_state_.store(FirmwareUpdateState::CURRENT);
+    nothing.update(); assert(!nothing.resume_device_update_ && !nothing.is_ota_preparing());
+    assert_available();
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:

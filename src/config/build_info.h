@@ -11,7 +11,7 @@
 #endif
 
 // Build information - BUILD_FIRMWARE_VERSION is automatically updated by release scripts
-#define BUILD_FIRMWARE_VERSION "1.6.2"                                          // Firmware version string (updated by release automation)
+#define BUILD_FIRMWARE_VERSION "1.6.3"                                          // Firmware version string (updated by release automation)
 // BUILD_NUMBER is now defined in git_info.h as an auto-incrementing integer
 
 // GitHub repository whose releases this firmware offers as updates, and the

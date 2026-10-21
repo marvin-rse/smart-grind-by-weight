@@ -21,6 +21,7 @@
 #include "../controllers/grind_controller.h"
 #include "../network/device_web_server.h"
 #include "../network/wifi_power_policy.h"
+#include "../system/boot_intent.h"
 
 extern HardwareManager hardware_manager;
 extern GrindController grind_controller;
@@ -292,6 +293,10 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
 }
 
 void BluetoothManager::enable_during_bootup() {
+    if (boot_intent::take_skip_bluetooth()) {
+        log("Bluetooth: Not started on this boot to keep resources free for a firmware update\n");
+        return;
+    }
     Preferences prefs;
     prefs.begin("bluetooth", true);
     if (prefs.getBool("startup", true)) {

@@ -4,6 +4,24 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.6.3] - 2026-10-21
+
+### Fixed
+- Firmware updates no longer fail when Bluetooth is active. Stopping Bluetooth
+  in the running system left transfers unreliable; the grinder now restarts
+  once without Bluetooth and the update continues automatically - from the web
+  page and from "Install update" on the grinder.
+- GitHub downloads resume after a dropped or stalled connection (up to five
+  times, using HTTP Range) instead of failing.
+
+### Changed
+- Manual uploads show each step, real upload progress from the browser and a
+  reminder to keep the page open.
+- The diagnostic log (now 6 KB) survives software restarts, crashes and the
+  restart after a failed update; a marker shows where the restart happened.
+  It moved to RTC memory, freeing about 4 KB of internal RAM.
+- The system page shows the grinder's Wi-Fi signal strength.
+
 ## [1.6.2] - 2026-10-21
 
 ### Fixed

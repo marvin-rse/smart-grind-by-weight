@@ -44,8 +44,11 @@ This file documents my specific build. It is based on this fork of
   [`firmware/v1.6.0-v2/`](../firmware/v1.6.0-v2/)
 - **v1.6.1**: smoother display when swiping, updates offered from this
   fork, 50-session history: [`firmware/v1.6.1-v2/`](../firmware/v1.6.1-v2/)
-- **v1.6.2** (current): no stutter when swiping between doses:
+- **v1.6.2**: no stutter when swiping between doses:
   [`firmware/v1.6.2-v2/`](../firmware/v1.6.2-v2/)
+- **v1.6.3** (current): reliable updates with Bluetooth active, resumable
+  downloads, log kept across restarts, Wi-Fi signal on the system page:
+  [`firmware/v1.6.3-v2/`](../firmware/v1.6.3-v2/)
 - All builds are also available under [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases)
   and in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/).
 

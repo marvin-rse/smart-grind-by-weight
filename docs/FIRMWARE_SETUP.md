@@ -63,6 +63,12 @@ Before flashing, verify that the selected image matches the display generation. 
    BLE updating remains available as a fallback when the grinder cannot join
    the local Wi-Fi network.
 
+   If Bluetooth is active when an update starts, the grinder restarts once
+   without Bluetooth and then continues the update; keep the page open. GitHub
+   downloads resume automatically after a dropped connection. After a failed
+   update, the diagnostic log under System & updates still contains the
+   details (it survives restarts until the grinder is switched off).
+
    **Wi-Fi power saving** (Settings → Connectivity, on by default) lets the
    radio doze between router beacons, which makes the web interface noticeably
    slower. Turn it off for a faster interface; the change applies immediately.

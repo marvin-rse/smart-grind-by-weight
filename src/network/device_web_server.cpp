@@ -24,6 +24,7 @@
 #include "network_manager.h"
 #include "device_api.h"
 #include "firmware_board_check.h"
+#include "../system/boot_intent.h"
 #include "ota_stream.h"
 
 namespace {
@@ -110,6 +111,8 @@ struct ScreensaverUploadState {
 
 constexpr uint32_t OTA_REBOOT_DELAY_MS = 1500;
 constexpr uint32_t OTA_PREPARE_TIMEOUT_MS = 15000;
+// Reconnects after a dropped or stalled GitHub download before giving up.
+constexpr int OTA_MAX_DOWNLOAD_RESUMES = 5;
 constexpr uint32_t OTA_READY_WINDOW_MS = 30000;
 constexpr size_t OTA_MIN_INTERNAL_HEAP = 64U * 1024U;
 constexpr size_t OTA_DOWNLOAD_TASK_STACK = 12U * 1024U;
@@ -203,6 +206,7 @@ void DeviceWebServer::init(HardwareManager* hardware_manager, GrindController* g
     hardware_manager_ = hardware_manager;
     grind_controller_ = grind_controller;
     bluetooth_manager_ = bluetooth_manager;
+    resume_device_update_ = boot_intent::take_resume_device_update();
     device_api.init(&server_, hardware_manager_, grind_controller_, profile_controller);
     configure_routes();
     initialized_ = true;
@@ -231,11 +235,17 @@ void DeviceWebServer::update() {
             recover_from_ota_failure();
         } else {
             if (bluetooth_manager_ && bluetooth_manager_->is_enabled()) {
-                LOG_BLE("[WEB OTA] Temporarily disabling Bluetooth to free update memory\n");
-                bluetooth_manager_->disable();
-                ota_bluetooth_stopped_.store(true);
-            }
-            if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >=
+                // Transfers failed after stopping Bluetooth in the running system,
+                // while updates after a boot without Bluetooth succeed. Restart once
+                // without Bluetooth; the page or the on-device flow then continues.
+                // The operation interlock stays held until the restart.
+                LOG_BLE("[WEB OTA] Restarting without Bluetooth to prepare the update\n");
+                boot_intent::request_update_restart(on_device_update_pending_.load());
+                on_device_update_pending_.store(false);
+                ota_preparation_state_.store(OtaPreparationState::RESTARTING);
+                reboot_at_ms_.store(millis() + OTA_REBOOT_DELAY_MS);
+                reboot_pending_.store(true);
+            } else if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >=
                 OTA_MIN_INTERNAL_HEAP) {
                 ota_preparation_deadline_ms_.store(millis() + OTA_READY_WINDOW_MS);
                 ota_preparation_state_.store(OtaPreparationState::READY);
@@ -249,6 +259,20 @@ void DeviceWebServer::update() {
                static_cast<int32_t>(millis() - ota_preparation_deadline_ms_.load()) >= 0) {
         LOG_BLE("[WEB OTA] Prepared upload expired\n");
         recover_from_ota_failure();
+    }
+
+    // After the restart without Bluetooth, continue an update that was started
+    // on the grinder once the release check has run again.
+    if (resume_device_update_ && last_firmware_update_check_ms_.load() != 0 &&
+        !firmware_update_check_active_.load()) {
+        resume_device_update_ = false;
+        if (!firmware_update_available()) {
+            LOG_BLE("[WEB OTA] No update to resume after restart\n");
+        } else if (!install_available_update()) {
+            LOG_BLE("[WEB OTA] Could not resume the on-device update\n");
+        } else {
+            LOG_BLE("[WEB OTA] Resuming the on-device update\n");
+        }
     }
 
     if (on_device_update_pending_.load() && is_ota_ready()) {
@@ -453,10 +477,10 @@ void DeviceWebServer::configure_routes() {
             "\"capabilities\":{\"protocol\":1,\"transport\":\"websocket\",\"path\":\"/ws\",\"state_interval_ms\":100,"
             "\"commands\":[\"start\",\"start_manual\",\"stop\",\"dismiss\",\"tare\",\"select_profile\",\"set_mode\"]},"
             "\"firmware\":{\"version\":\"%s\",\"build\":%d,\"commit\":\"%s\",\"release_repository\":\"%s\"},"
-            "\"network\":{\"state\":\"%s\",\"hostname\":\"%s\",\"ssid\":\"%s\",\"ip\":\"%s\"},"
+            "\"network\":{\"state\":\"%s\",\"hostname\":\"%s\",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d},"
             "\"system\":{\"uptime_ms\":%lu,\"free_heap\":%u,\"free_internal_heap\":%u,"
             "\"largest_internal_block\":%u,\"free_psram\":%u},"
-            "\"ota\":{\"active\":%s,\"preparing\":%s,\"ready\":%s,\"progress\":%u,\"failed\":%s}}",
+            "\"ota\":{\"active\":%s,\"preparing\":%s,\"restarting\":%s,\"ready\":%s,\"progress\":%u,\"failed\":%s}}",
             device_id.c_str(),
             HW_DISPLAY_REVISION,
             BUILD_FIRMWARE_VERSION,
@@ -467,6 +491,7 @@ void DeviceWebServer::configure_routes() {
             hostname.c_str(),
             network_name.c_str(),
             ip_address.c_str(),
+            network_manager.is_connected() ? static_cast<int>(WiFi.RSSI()) : 0,
             static_cast<unsigned long>(millis()),
             static_cast<unsigned int>(ESP.getFreeHeap()),
             static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
@@ -474,6 +499,7 @@ void DeviceWebServer::configure_routes() {
             static_cast<unsigned int>(ESP.getFreePsram()),
             device_web_server.is_ota_active() ? "true" : "false",
             device_web_server.is_ota_preparing() ? "true" : "false",
+            device_web_server.is_ota_restarting() ? "true" : "false",
             device_web_server.is_ota_ready() ? "true" : "false",
             device_web_server.ota_progress_percent(),
             device_web_server.ota_failed() ? "true" : "false");
@@ -888,28 +914,71 @@ void DeviceWebServer::perform_github_ota(const String& tag) {
     ota_total_.store(static_cast<size_t>(content_length));
     ota_received_.store(1);
     uint8_t buffer[4096];
-    uint32_t idle_deadline = millis() + 15000;
-    while (http.connected() && ota_received_.load() < ota_total_.load()) {
-        const size_t available = stream->available();
-        if (available == 0) {
-            if (static_cast<int32_t>(millis() - idle_deadline) >= 0) break;
-            delay(2);
+    int resumes = 0;
+    for (;;) {
+        uint32_t idle_deadline = millis() + 15000;
+        while (http.connected() && ota_received_.load() < ota_total_.load()) {
+            const size_t available = stream->available();
+            if (available == 0) {
+                if (static_cast<int32_t>(millis() - idle_deadline) >= 0) break;
+                delay(2);
+                continue;
+            }
+            const size_t wanted = std::min(available, sizeof(buffer));
+            const int read = stream->readBytes(buffer, wanted);
+            if (read <= 0) break;
+            if (web_firmware_update.write(buffer, static_cast<size_t>(read)) != static_cast<size_t>(read)) {
+                LOG_BLE("[WEB OTA] Flash write failed: %s\n", web_firmware_update.errorString());
+                web_firmware_update.abort();
+                http.end();
+                finish_ota(false);
+                return;
+            }
+            ota_received_.fetch_add(static_cast<size_t>(read));
+            idle_deadline = millis() + 15000;
+        }
+        http.end();
+        if (ota_received_.load() >= ota_total_.load() || resumes >= OTA_MAX_DOWNLOAD_RESUMES) break;
+
+        // The connection dropped or stalled: reconnect and continue where it stopped.
+        ++resumes;
+        const size_t offset = ota_received_.load();
+        LOG_BLE("[WEB OTA] Connection lost at %lu/%lu bytes (RSSI %d dBm); resuming %d/%d\n",
+                static_cast<unsigned long>(offset), static_cast<unsigned long>(ota_total_.load()),
+                static_cast<int>(WiFi.RSSI()), resumes, OTA_MAX_DOWNLOAD_RESUMES);
+        delay(1000U * resumes);
+        if (!http.begin(secure_client, url)) continue;
+        http.addHeader("Cache-Control", "no-cache");
+        http.addHeader("Range", "bytes=" + String(static_cast<unsigned long>(offset)) + "-");
+        const int resume_status = http.GET();
+        const int resume_length = http.getSize();
+        stream = http.getStreamPtr();
+        size_t skip = 0;
+        if (resume_status == HTTP_CODE_PARTIAL_CONTENT &&
+            resume_length == static_cast<int>(ota_total_.load() - offset)) {
+            skip = 0;  // server continues at the requested offset
+        } else if (resume_status == HTTP_CODE_OK && resume_length == static_cast<int>(ota_total_.load())) {
+            skip = offset;  // range ignored: discard what was already written
+        } else {
+            LOG_BLE("[WEB OTA] Resume refused: HTTP %d, length %d\n", resume_status, resume_length);
+            http.end();
             continue;
         }
-        const size_t wanted = std::min(available, sizeof(buffer));
-        const int read = stream->readBytes(buffer, wanted);
-        if (read <= 0) break;
-        if (web_firmware_update.write(buffer, static_cast<size_t>(read)) != static_cast<size_t>(read)) {
-            LOG_BLE("[WEB OTA] Flash write failed: %s\n", web_firmware_update.errorString());
-            web_firmware_update.abort();
-            http.end();
-            finish_ota(false);
-            return;
+        uint32_t skip_deadline = millis() + 15000;
+        while (skip > 0 && stream && http.connected() &&
+               static_cast<int32_t>(millis() - skip_deadline) < 0) {
+            const size_t available = stream->available();
+            if (available == 0) {
+                delay(2);
+                continue;
+            }
+            const int read = stream->readBytes(buffer, std::min({available, sizeof(buffer), skip}));
+            if (read <= 0) break;
+            skip -= static_cast<size_t>(read);
+            skip_deadline = millis() + 15000;
         }
-        ota_received_.fetch_add(static_cast<size_t>(read));
-        idle_deadline = millis() + 15000;
+        if (skip > 0 || !stream) http.end();
     }
-    http.end();
     const bool complete = ota_received_.load() == ota_total_.load();
     const bool valid = complete && web_firmware_update.end(true);
     if (!valid) {

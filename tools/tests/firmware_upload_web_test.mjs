@@ -12,7 +12,7 @@ for (const pattern of ['SMARTGRIND-BOARD:V', 'touch-amoled-164/', 'touch-amoled-
   assert.equal(page.includes(pattern), false, `page contains ${pattern}`);
 }
 
-function makeContext(statusReplies) {
+function makeContext(statusReplies, log = {prepares: 0, steps: []}) {
   let clock = 0;
   const elements = new Map();
   const context = vm.createContext({
@@ -21,7 +21,8 @@ function makeContext(statusReplies) {
     toast: () => {},
     performance: {now: () => clock},
     setTimeout: (resolve, ms) => { clock += ms; resolve(); },
-    api: async () => {
+    api: async url => {
+      if (url.includes('/ota/prepare')) { log.prepares++; return {preparing: true}; }
       const reply = statusReplies.shift();
       if (!reply) throw new TypeError('Failed to fetch');
       return reply;
@@ -64,5 +65,41 @@ assert.equal(await context.detectFirmwareBoard(blob('\xe9 .pio/libdeps/waveshare
 assert.equal(await context.detectFirmwareBoard(blob('\xe9 touch-amoled-164/ SMARTGRIND-BOARD:V2\0')), 'v2');
 assert.equal(await context.detectFirmwareBoard(blob('SMARTGRIND-BOARD:V1 SMARTGRIND-BOARD:V2')), '');
 assert.equal(await context.detectFirmwareBoard(blob('\xe9 no markers here')), '');
+
+// Preparing: Bluetooth off -> ready directly.
+const prep = (uptime, ota) => ({system: {uptime_ms: uptime}, firmware: {build: 6},
+  ota: {active: false, preparing: false, restarting: false, ready: false, ...ota}});
+let log = {prepares: 0, steps: []};
+context = makeContext([prep(400000, {preparing: true}), prep(400500, {ready: true})], log);
+await context.prepareForUpdate(step => log.steps.push(step));
+assert.equal(log.prepares, 1);
+
+// Bluetooth on: the grinder restarts without Bluetooth, comes back idle, is prepared again.
+log = {prepares: 0, steps: []};
+context = makeContext([prep(400000, {preparing: true, restarting: true}), null, null,
+  prep(3000, {}), prep(3500, {preparing: true}), prep(4000, {ready: true})], log);
+await context.prepareForUpdate(step => log.steps.push(step));
+assert.equal(log.prepares, 2);
+assert.ok(log.steps.some(step => /without Bluetooth/.test(step)));
+assert.ok(log.steps.some(step => /restarted/.test(step)));
+
+// A restart noticed only through uptime (status never showed "restarting").
+log = {prepares: 0, steps: []};
+context = makeContext([prep(400000, {preparing: true}), prep(2000, {}), prep(2500, {ready: true})], log);
+await context.prepareForUpdate(() => {});
+assert.equal(log.prepares, 2);
+
+// Restarting a second time is reported instead of looping.
+context = makeContext([prep(400000, {restarting: true, preparing: true}), prep(1000, {}),
+  prep(1500, {restarting: true, preparing: true}), prep(900, {})]);
+await assert.rejects(context.prepareForUpdate(() => {}), /restarted again/);
+
+// Not enough memory: preparation ends without becoming ready.
+context = makeContext([prep(400000, {preparing: true}), ...Array.from({length: 10}, (_, i) => prep(401000 + i * 500, {}))]);
+await assert.rejects(context.prepareForUpdate(() => {}), /free enough memory/);
+
+// No answer at all for 90 s.
+context = makeContext([]);
+await assert.rejects(context.prepareForUpdate(() => {}), /did not get ready/);
 
 console.log('Firmware upload web tests passed.');
