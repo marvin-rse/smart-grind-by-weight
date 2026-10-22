@@ -26,7 +26,7 @@ Compared with the upstream community firmware:
 
 **Display (V2)**
 - No green flash at power-on — the backlight stays off until the first frame is drawn.
-- Smoother display — frames are rendered once into PSRAM instead of in many small strips.
+- Smoother display with almost no lag — frames are rendered once into PSRAM instead of in many small strips.
 - No stutter when swiping between Single, Double and Custom — the selected dose
   is saved after the animation, not during it.
 
