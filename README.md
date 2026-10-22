@@ -1,51 +1,88 @@
-# Smart Grind-by-Weight
+# Smart Grind-by-Weight · Eureka V2 fork
 
-> [!NOTE]
-> **My build (Eureka Mignon + Waveshare 1.64" V2):** Unlike jaapp's original, this fork runs
-> the V2 firmware v1.5.9 (SH8601 display) with changed wiring: HX711 SCK on **GPIO 1** instead of 2,
-> motor on **GPIO 16** instead of 18, GPIO 18 stays unconnected.
-> Details: [docs/MY_SETUP.md](docs/MY_SETUP.md) · Firmware: [firmware/v1.5.9-v2](firmware/v1.5.9-v2/)
-
-[![Latest release](https://img.shields.io/github/v/release/Clinteastman/smart-grind-by-weight?display_name=tag&logo=github)](https://github.com/Clinteastman/smart-grind-by-weight/releases/latest)
-[![Firmware](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/firmware.yml/badge.svg)](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/firmware.yml)
-[![Desktop simulator](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/simulator.yml/badge.svg)](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/simulator.yml)
-[![Web flasher](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/deploy-web-flasher.yml/badge.svg)](https://github.com/Clinteastman/smart-grind-by-weight/actions/workflows/deploy-web-flasher.yml)
-[![Downloads](https://img.shields.io/github/downloads/Clinteastman/smart-grind-by-weight/total?logo=github&label=downloads)](https://github.com/Clinteastman/smart-grind-by-weight/releases)
-[![Hardware](https://img.shields.io/badge/hardware-Waveshare%20V1%20%7C%20V2-6f42c1)](docs/GRINDER_COMPATIBILITY.md)
+[![Latest release](https://img.shields.io/github/v/release/marvin-rse/smart-grind-by-weight?display_name=tag&logo=github)](https://github.com/marvin-rse/smart-grind-by-weight/releases/latest)
+[![Firmware](https://github.com/marvin-rse/smart-grind-by-weight/actions/workflows/firmware.yml/badge.svg)](https://github.com/marvin-rse/smart-grind-by-weight/actions/workflows/firmware.yml)
+[![Web flasher](https://github.com/marvin-rse/smart-grind-by-weight/actions/workflows/deploy-web-flasher.yml/badge.svg)](https://marvin-rse.github.io/smart-grind-by-weight/)
+[![Hardware](https://img.shields.io/badge/tested%20on-Eureka%20Mignon%20%2B%20Waveshare%20V2-6f42c1)](docs/MY_SETUP.md)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-> [!TIP]
-> **Using Home Assistant?** Add automatic discovery, live local-push sensors,
-> grinder controls and firmware-update reporting with the companion
-> **[Smart Grind by Weight Home Assistant integration →](https://github.com/Clinteastman/smart-grind-home-assistant)**
+Grind-by-weight for the Eureka Mignon using a Waveshare ESP32-S3 1.64" AMOLED
+board and a load cell. This fork builds on the
+[community project by Clinteastman](https://github.com/Clinteastman/smart-grind-by-weight)
+(itself continuing [jaapp's original](https://github.com/jaapp/smart-grind-by-weight))
+and focuses on the **newer V2 board (SH8601 display)**, smoother display
+performance and reliable Wi-Fi updates.
 
-Turn a compatible coffee grinder into a precise, touch-controlled
-grind-by-weight system using a Waveshare ESP32-S3 AMOLED board and load cell.
-Smart Grind learns the grinder's live flow and stopping delay, switches the
-motor off before the target, then uses controlled pulses to finish the dose.
-
-> **Community-maintained fork.** This repository continues the
-> [original Smart Grind-by-Weight project](https://github.com/jaapp/smart-grind-by-weight)
-> with tested hardware support and new releases while upstream maintenance is
-> limited. The original project, author and community contributors remain
-> credited, and retained commits preserve their authorship.
-
-**[Flash firmware](https://clinteastman.github.io/smart-grind-by-weight/)** ·
-**[Build & installation guide](docs/DOC.md#start-here)** ·
-**[What's new in v1.5.9](CHANGELOG.md#159---2026-09-06)** ·
+**[Flash firmware](https://marvin-rse.github.io/smart-grind-by-weight/)** ·
+**[Download releases](https://github.com/marvin-rse/smart-grind-by-weight/releases)** ·
+**[V2 wiring & setup](docs/MY_SETUP.md)** ·
+**[Changelog](CHANGELOG.md)** ·
 **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
-> [!TIP]
-> **Firmware installation stuck at 0%?** The v1.5.9 hotfix repairs a download
-> timing bug and adds clear update-failure feedback. Once it appears in
-> [GitHub Releases](https://github.com/Clinteastman/smart-grind-by-weight/releases),
-> download its matching V1 or V2 application `.bin` and use **System & updates →
-> Manual firmware file → Upload firmware** if your current automatic installer
-> fails. No USB connection or settings reset is needed. Read the
-> [hotfix notes](CHANGELOG.md#159---2026-09-06).
+## What's different in this fork
 
-See [release validation](docs/RELIABILITY_RELEASE.md) for the tested candidate
-and coverage limits. The release badge above identifies the latest published build.
+Current version: **[v1.6.3](https://github.com/marvin-rse/smart-grind-by-weight/releases/latest)**.
+Compared with the upstream community firmware:
+
+**Display (V2)**
+- No green flash at power-on — the backlight stays off until the first frame is drawn.
+- Smoother display — frames are rendered once into PSRAM instead of in many small strips.
+- No stutter when swiping between Single, Double and Custom — the selected dose
+  is saved after the animation, not during it.
+
+**Firmware updates**
+- Updates are offered from this fork, so installing one keeps these changes.
+- Reliable while Bluetooth is active — the grinder restarts once without
+  Bluetooth and continues the update automatically.
+- GitHub downloads resume after a dropped connection instead of failing.
+- Manual uploads show each step and real progress, and confirm the new build
+  after the restart.
+- Manual uploads refuse firmware for the wrong board generation.
+
+**Web interface**
+- Served compressed (16 KB instead of 56 KB) and cached by the browser.
+- Optional **Wi-Fi power saving** switch (Settings → Connectivity) for a faster interface.
+- Wi-Fi signal strength on the system page.
+
+**Grind history and diagnostics**
+- Delete a single grind (e.g. a test run); it is also removed from the lifetime statistics.
+- Keeps the latest 50 grinds instead of 10.
+- The diagnostic log survives restarts, so the reason for a failed update is never lost.
+
+Every change is covered by host tests in [`tools/tests`](tools/tests) and built
+for both board generations by CI.
+
+## Which firmware file do I need?
+
+Identify the board **by its display, not by the `Rev1.1` print on the PCB**
+(see [Display stays black after flashing](docs/TROUBLESHOOTING.md#display-stays-black-after-flashing-waveshare-164-v2)).
+
+| Your board | First install (USB, web flasher) | Update over Wi-Fi (*System & updates → Manual firmware file*) |
+| --- | --- | --- |
+| **V2** – SH8601 display (newer) | select **V2** in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/) | `smart-grind-by-weight-vX.Y.Z-waveshare-164-v2.bin` |
+| **V1** – CO5300 display (original) | select **V1** in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/) | `smart-grind-by-weight-vX.Y.Z.bin` |
+
+> [!IMPORTANT]
+> Never upload files ending in `-web-ota`, `-bootloader` or `-partitions`, or
+> the `.manifest.json` — they are used by the web flasher only. A V1 image on a
+> V2 board leaves the display black, so the grinder refuses it.
+
+**Updating:** on the grinder's web page open *System & updates* and press
+*Install update*, or upload the matching file manually. Keep the page open
+until it reports the new build.
+
+## V2 wiring at a glance
+
+The V2 board needs different GPIOs than the original guide:
+
+| Signal | V1 (original guide) | **V2** |
+| --- | --- | --- |
+| HX711 SCK | GPIO 2 | **GPIO 1** |
+| HX711 DOUT | GPIO 3 | GPIO 3 |
+| Motor (Eureka plug pin 3) | GPIO 18 | **GPIO 16** |
+| GPIO 18 | motor | **leave unconnected** (touch interrupt) |
+
+Full wiring, load-cell colours and commissioning steps: [docs/MY_SETUP.md](docs/MY_SETUP.md).
 
 <table>
 <tr>
@@ -64,63 +101,23 @@ https://github.com/user-attachments/assets/e20ce3e2-417e-4a3b-bb48-05591fce9418
 
 ## Features
 
+Everything from the community project is included:
+
 - **Accurate grind-by-weight control** with predictive motor stopping,
-  controlled finishing pulses and a configurable control tolerance of
-  ±0.03 g.
-- **Three editable profiles** for Single, Double and Custom doses, synchronized
-  between the touchscreen and browser.
-- **Target-free Manual mode** with one-tap start/stop, large optional live
-  weight and TARE controls, elapsed time, motor-only lifetime accounting and an
-  independent 30-second safety cutoff.
-- **Grind-by-time mode** for the original timed workflow, including pause and
-  resume and operation without a load cell.
-- **Responsive AMOLED interface** with chart and arc views, faster partial
-  display updates and reliable short-swipe gestures.
-- **Adjustable coast compensation** from 70% to 150%, stored on the grinder;
-  the neutral 100% default preserves the original behaviour.
-- **Automatic or manual motor-latency tuning** with a guarded 30–300 ms manual
-  fallback on both the touchscreen and web interface when Pulse Tune cannot
-  complete reliably.
-- **Configurable automatic-start threshold** for cup or portafilter detection,
-  editable from the touchscreen or web interface with the original 50 g
-  behaviour retained by default.
-- **Built-in screensavers** plus custom RGB565 image upload and an optional
-  live GaggiMate status view, with configurable brightness, startup display
-  and idle timeout. An optional second delay can turn the AMOLED panel fully
-  off; leaving it disabled keeps the screensaver visible indefinitely.
-- **Local Wi-Fi web app** with light/dark themes, live weight and flow, saved
-  dose selection, round start/stop control, settings, grind history, analytics
-  and data downloads.
-- **Wi-Fi setup on the device** with network scanning, a secured captive portal,
-  QR access, Improv Serial provisioning and `smartgrind.local` discovery.
-- **One-click firmware updates from GitHub**, with automatic stable-release
-  checks, a touchscreen update indicator and on-device installer, strict V1/V2
-  image selection, plus manual Wi-Fi/Bluetooth upload and USB recovery.
-- **On-device diagnostics** with downloadable retained startup/runtime logs.
-- **Checked settings saves and stronger fault handling**, including runtime
-  save confirmation, stale-scale stops and coordinated motor/update operations.
-- **V1 and V2 Waveshare support**, reproducible CI builds, a public web flasher
-  and a deterministic Windows desktop simulator for development.
-
-Network clients request a selected-profile start or stop through the same grind
-controller used by the touchscreen; they never drive the relay directly. The
-firmware remains responsible for load-cell checks, state transitions and motor
-safety.
-
-## Web interface
-
-The responsive web interface is served directly by the grinder at
-`http://smartgrind.local`; no cloud account or separate application is needed.
-Choose a saved dose, start or stop it with the round grind control, follow the
-current grind, review its full recorded trace, change grinder/display settings
-and install the latest stable firmware from a browser on the same network. The
-System & updates page checks this project's GitHub releases and selects the
-matching V1 or V2 application image automatically; manual upload remains
-available as an advanced fallback. The grinder also checks in the background
-while idle: a green refresh symbol appears when an update is ready, and either
-that symbol or **Menu → Wi-Fi → Install update** starts the same guarded update
-flow. If mDNS is unavailable, use the IP address shown on the grinder's Wi-Fi
-screen.
+  controlled finishing pulses and a configurable tolerance of ±0.03 g.
+- **Three editable profiles** (Single, Double, Custom), synchronized between
+  touchscreen and browser, plus **grind-by-time** and a target-free
+  **Manual mode** with a 30-second safety cutoff.
+- **Responsive AMOLED interface** with chart and arc views and swipe gestures.
+- **Motor-latency tuning** (automatic or manual) and adjustable coast compensation.
+- **Automatic start** when a cup or portafilter is placed (configurable threshold).
+- **Screensavers**, custom image upload and an optional GaggiMate status view.
+- **Local Wi-Fi web app** at `http://smartgrind.local` with live weight and
+  flow, dose selection, start/stop, settings, grind history with charts and
+  CSV/JSON downloads, and firmware updates.
+- **Wi-Fi setup on the device** with network scan, captive portal and QR code.
+- **Home Assistant** via the companion
+  [Smart Grind integration](https://github.com/Clinteastman/smart-grind-home-assistant).
 
 <table>
 <tr>
@@ -129,17 +126,7 @@ screen.
 </tr>
 </table>
 
-<p align="center">
-<strong>Grinder settings</strong><br>
-<img src="media/web-ui-settings.png" alt="Smart Grind web settings for profiles and grind behaviour" width="75%">
-</p>
-
-The grinder retains the latest 50 logged sessions (up to 1.5 MB) with accuracy, consistency,
-weight and flow data. Each session can be downloaded as CSV, JSON or its
-original raw record. BLE export and the Python analysis tools remain available
-for longer-term archives and recovery workflows.
-
-## Quick start
+## Building one
 
 > [!CAUTION]
 > This is an experimental mains-powered appliance modification. Disconnect the
@@ -147,35 +134,19 @@ for longer-term archives and recovery workflows.
 > and ask a qualified person to handle mains wiring if you are not competent to
 > do so. Build and use it at your own risk.
 
-1. **Check compatibility and collect the parts.** Start with the
-   [parts list](docs/HARDWARE_INSTALLATION.md#parts-list) and
-   [grinder compatibility matrix](docs/GRINDER_COMPATIBILITY.md).
-2. **Print the mounting parts.** Use the included STL files and review the
-   [community 3D-print designs](docs/3D_PRINTS.md).
-3. **Identify the controller generation before flashing.** The 1.64-inch V1
-   and V2 boards require different display firmware and external GPIO wiring.
-   Do not rely on the ambiguous `Rev1.1` PCB text alone; use the photographs and
-   connector/component checks in
-   [Display stays black after flashing](docs/TROUBLESHOOTING.md#display-stays-black-after-flashing-waveshare-164-v2).
-4. **Flash the matching image.** Open the
-   [Community Web Flasher](https://clinteastman.github.io/smart-grind-by-weight/)
-   in Chrome or Edge on desktop/Android and explicitly select V1 or V2. USB
-   recovery instructions and command-line alternatives are in the
-   [development guide](docs/DEVELOPMENT.md).
-5. **Wire, assemble and calibrate.** Follow the ordered
-   [build and installation checklist](docs/DOC.md#start-here) and the
-   [Eureka build video](https://youtu.be/-kfKjiwJsGM). On the verified V2
-   installation, HX711 SCK is GPIO1 and the motor relay is GPIO16; GPIO18 is
-   reserved by the touch controller.
+1. **Parts:** [parts list](docs/HARDWARE_INSTALLATION.md#parts-list) and
+   [grinder compatibility](docs/GRINDER_COMPATIBILITY.md).
+2. **3D prints:** STL files in [`3d_files`](3d_files) and
+   [community designs](docs/3D_PRINTS.md).
+3. **Identify V1 or V2** (see above), then **flash over USB** with the
+   [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/) before
+   wiring — the display must show something.
+4. **Wire and assemble** following [docs/MY_SETUP.md](docs/MY_SETUP.md) (V2) or
+   the [original guide](docs/DOC.md#start-here) (V1), and the
+   [Eureka build video](https://youtu.be/-kfKjiwJsGM).
+5. **Calibrate:** *Menu → Calibrate*, then *Menu → Tune Pulses*.
 
-The original timed mode remains available, and the documented Eureka
-installation can be reversed without permanently modifying the grinder body.
-
-For an uncomplicated target-free run, swipe to **Manual**, the first main-screen
-page. If a scale is fitted, place the empty cup on it and tap **TARE**, then tap
-**START**. Tap **STOP** when enough coffee has been ground. The large live weight
-remains available before and after grinding. Manual mode never requires or
-automatically tares the load cell and stops automatically after 30 seconds.
+The Eureka installation can be reversed without permanently modifying the grinder.
 
 ## How grinding works
 
@@ -189,74 +160,29 @@ flowchart LR
   P -->|more coffee needed| S
 ```
 
-The controller learns flow and motor latency during each grind, predicts when
-to stop before the requested weight, then evaluates the settled dose. Short,
-bounded pulses finish an under-target dose without requiring a pre-trained bean
-or grind-size profile. Coast compensation lets experienced users scale the
-latency estimate while leaving the neutral default unchanged. **Menu → Tune
-Pulses** remains the recommended way to measure minimum pulse latency; the same
-stored value can be adjusted manually under **Grind Settings** when automatic
-tuning is unavailable.
+The controller learns flow and motor latency during each grind, stops the motor
+before the target and finishes with short, bounded pulses — no bean- or
+grind-size profile needed.
 
-## Community development status
+## Development
 
-The released baseline supports both V1 and V2, with separate firmware builds.
-The 1.5.8 candidate passed supervised V2 Wi-Fi installation, an 18 g grind with
-saved history, and a live-settings check. Community V1 hardware testing is
-welcome. See [release validation](docs/RELIABILITY_RELEASE.md) for coverage limits.
+PlatformIO targets, simulator and tests: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+Releases are built by GitHub Actions: pushing a branch `release/vX.Y.Z` builds
+both board generations, publishes release `vX.Y.Z` and updates the web flasher.
 
-| Stage | Status | Outcome |
-| --- | --- | --- |
-| V1/V2 maintained baseline | Complete | Tested firmware targets, V2 wiring, simulator and faster/reliable display gestures |
-| Public web flasher and releases | Complete | Explicit controller-generation selection and downloadable, reproducible V1/V2 packages |
-| Wi-Fi provisioning and safe OTA | Complete | Reliable setup, `smartgrind.local` discovery, one-click stable-release updates and manual full-image upload |
-| Shared live device API | Complete | Bounded 10 Hz WebSocket feed, correlated controller-backed grind/profile/tare requests, settings and history APIs |
-| Live grinder web UI | Complete | Dashboard, live/completed graphs, settings, history/analytics, downloads, OTA and screensavers |
-| Native Home Assistant integration | Complete | [Separate Zeroconf/local-push integration](https://github.com/Clinteastman/smart-grind-home-assistant), validated in Home Assistant 2026.8 against physical V2 hardware with correlated safe commands and a separate user-present one-second protocol motor acceptance |
+When reporting a problem, include your board generation, the firmware build and
+the diagnostic log (*System & updates → Recent diagnostic log → Download*).
+Problems that also occur with the upstream firmware belong to the
+[community project](https://github.com/Clinteastman/smart-grind-by-weight/issues).
 
-The [community roadmap](docs/COMMUNITY_ROADMAP.md) records the detailed delivery
-status, reviewed upstream work and contribution plan. The independently
-implemented [Wi-Fi, Web and Home Assistant architecture](docs/WIFI_ARCHITECTURE.md)
-uses lessons from mature ESP32 appliance projects without copying their source.
+## Credits and license
 
-## Development and contributing
+- Original project by [Jaap Pieroen (@jaapp)](https://github.com/jaapp); community
+  maintenance and V2 support by [Clinteastman](https://github.com/Clinteastman)
+  with contributions from [Randy1st](https://github.com/Randy1st),
+  [Woutifier](https://github.com/Woutifier), [quickcoffee](https://github.com/quickcoffee)
+  and [FleischerT](https://github.com/FleischerT). Their commit history is retained.
+- Inspired by [openGBW](https://github.com/jb-xyz/openGBW) and
+  [Coffee Grinder Smart Scale](https://besson.co/projects/coffee-grinder-smart-scale).
 
-See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for the PlatformIO targets, simulator,
-tests and contribution workflow. Build and flash operations use a project lock,
-and V1/V2 compiled-object caches are isolated to prevent board-specific LVGL
-objects from mixing.
-
-The complete editable Fusion 360 design is included at
-`3d_files/smart-grind-by-weight. Eureka Mignon.f3z`.
-
-Please report reproducible problems through
-[GitHub Issues](https://github.com/Clinteastman/smart-grind-by-weight/issues),
-including the board generation, firmware version and a diagnostic log where
-possible. Tested V1 hardware feedback is particularly useful.
-
-## Credits
-
-- Smart Grind-by-Weight was originally created by
-  [Jaap Pieroen (@jaapp)](https://github.com/jaapp). This fork retains Jaap's
-  original commit history and remains licensed under GPLv3. The
-  [upstream README](https://github.com/jaapp/smart-grind-by-weight#readme)
-  preserves the original author's project introduction and personal note.
-- v1.5 incorporates reviewed contributions from
-  [Randy1st](https://github.com/Randy1st),
-  [Woutifier](https://github.com/Woutifier),
-  [quickcoffee](https://github.com/quickcoffee) and
-  [FleischerT](https://github.com/FleischerT). See the
-  [v1.5 changelog](CHANGELOG.md#community-contributions) for the source PRs.
-- The project was inspired by
-  [openGBW](https://github.com/jb-xyz/openGBW) by jb-xyz and
-  [Coffee Grinder Smart Scale](https://besson.co/projects/coffee-grinder-smart-scale)
-  by Besson.
-
-## Releases and license
-
-Read the versioned [changelog](CHANGELOG.md), download tested builds from
-[Community Releases](https://github.com/Clinteastman/smart-grind-by-weight/releases),
-or consult the [original release archive](https://github.com/jaapp/smart-grind-by-weight/releases).
-
-Smart Grind-by-Weight is free software distributed under the
-[GNU General Public License v3.0 or later](LICENSE).
+Free software under the [GNU General Public License v3.0 or later](LICENSE).

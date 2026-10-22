@@ -8,8 +8,8 @@ This file documents my specific build. It is based on this fork of
 
 | Area | Original (jaapp) | My build |
 |---|---|---|
-| Firmware source | jaapp, V1 only | Clinteastman community fork, **v1.5.9 V2** |
-| Web flasher | jaapp.github.io | [clinteastman.github.io](https://clinteastman.github.io/smart-grind-by-weight/) |
+| Firmware source | jaapp, V1 only | this fork, **v1.6.3 V2** |
+| Web flasher | jaapp.github.io | [marvin-rse.github.io](https://marvin-rse.github.io/smart-grind-by-weight/) |
 | Waveshare board | V1 (CO5300 display) | **V2 (SH8601 display)**, PCB silkscreened "Rev1.1" |
 | HX711 SCK | GPIO 2 | **GPIO 1** |
 | HX711 DOUT | GPIO 3 | GPIO 3 (unchanged) |
@@ -32,25 +32,11 @@ This file documents my specific build. It is based on this fork of
 
 ## Firmware
 
-- Installed: **v1.5.9 – Newer SH8601 (V2 firmware; may say Rev1.1)**
-- Flashed with the [Community Web Flasher](https://clinteastman.github.io/smart-grind-by-weight/) (Chrome/Edge, USB)
-- Copy of the application image: [`firmware/v1.5.9-v2/`](../firmware/v1.5.9-v2/)
-- Custom build without the green flash at power-on (untested):
-  [`firmware/v1.5.9-v2-boot-fix/`](../firmware/v1.5.9-v2-boot-fix/)
-- Beta with single-grind deletion in the web history and the boot fix (untested):
-  [`firmware/v1.5.9-beta.2-v2/`](../firmware/v1.5.9-beta.2-v2/)
-- **v1.6.0**: boot fix, single-grind deletion, Wi-Fi power saving
-  setting, faster web interface and a board check for manual uploads:
-  [`firmware/v1.6.0-v2/`](../firmware/v1.6.0-v2/)
-- **v1.6.1**: smoother display when swiping, updates offered from this
-  fork, 50-session history: [`firmware/v1.6.1-v2/`](../firmware/v1.6.1-v2/)
-- **v1.6.2**: no stutter when swiping between doses:
-  [`firmware/v1.6.2-v2/`](../firmware/v1.6.2-v2/)
-- **v1.6.3** (current): reliable updates with Bluetooth active, resumable
-  downloads, log kept across restarts, Wi-Fi signal on the system page:
-  [`firmware/v1.6.3-v2/`](../firmware/v1.6.3-v2/)
-- All builds are also available under [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases)
-  and in the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/).
+- Current: **v1.6.3 for V2** — [`firmware/v1.6.3-v2/`](../firmware/v1.6.3-v2/)
+- Flash it with the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/)
+  (Chrome/Edge, USB) and select V2. Older versions are available under
+  [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases).
+- What this firmware changes compared with upstream: see the [README](../README.md#whats-different-in-this-fork).
 
 The image there is the **application image** (for updates via Wi-Fi/Bluetooth:
 *System & updates → Manual firmware file*). For a full fresh install over USB,
