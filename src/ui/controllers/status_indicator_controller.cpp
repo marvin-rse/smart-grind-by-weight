@@ -7,8 +7,28 @@
 #include "../../system/diagnostics_controller.h"
 #include "../ui_manager.h"
 
+namespace {
+// Icons sit in one row at the top right. Only visible icons take a slot, so a
+// hidden icon (usually Bluetooth) never leaves a gap that pushes the others
+// towards the screen title.
+constexpr int32_t STATUS_ICON_EDGE_PX = 10;
+constexpr int32_t STATUS_ICON_SPACING_PX = 35;
+constexpr int32_t STATUS_ICON_TOP_PX = 10;
+}  // namespace
+
 StatusIndicatorController::StatusIndicatorController(UIManager* manager)
     : ui_manager_(manager) {}
+
+void StatusIndicatorController::position_icons() {
+    // Right to left: Bluetooth, Wi-Fi, warning, firmware update.
+    lv_obj_t* const icons[] = {ble_status_icon_, wifi_status_icon_, warning_icon_, firmware_update_icon_};
+    int32_t x = -STATUS_ICON_EDGE_PX;
+    for (lv_obj_t* icon : icons) {
+        if (!icon || lv_obj_has_flag(icon, LV_OBJ_FLAG_HIDDEN)) continue;
+        lv_obj_align(icon, LV_ALIGN_TOP_RIGHT, x, STATUS_ICON_TOP_PX);
+        x -= STATUS_ICON_SPACING_PX;
+    }
+}
 
 void StatusIndicatorController::build() {
     if (!ui_manager_) {
@@ -70,6 +90,7 @@ void StatusIndicatorController::build() {
     update_wifi_status_icon();
     update_warning_icon();
     update_firmware_update_icon();
+    position_icons();
 }
 
 void StatusIndicatorController::update() {
@@ -91,6 +112,7 @@ void StatusIndicatorController::update_firmware_update_icon() {
     } else {
         lv_obj_add_flag(firmware_update_icon_, LV_OBJ_FLAG_HIDDEN);
     }
+    position_icons();
 }
 
 void StatusIndicatorController::prompt_firmware_update() {
@@ -129,6 +151,7 @@ void StatusIndicatorController::update_ble_status_icon() {
     } else {
         lv_obj_add_flag(ble_status_icon_, LV_OBJ_FLAG_HIDDEN);
     }
+    position_icons();
 }
 
 void StatusIndicatorController::update_wifi_status_icon() {
@@ -141,10 +164,12 @@ void StatusIndicatorController::update_wifi_status_icon() {
     last_wifi_state_ = state;
     if (state == 0) {
         lv_obj_add_flag(wifi_status_icon_, LV_OBJ_FLAG_HIDDEN);
+        position_icons();
         return;
     }
 
     lv_obj_clear_flag(wifi_status_icon_, LV_OBJ_FLAG_HIDDEN);
+    position_icons();
     lv_obj_set_style_text_color(wifi_status_icon_,
                                 state == 2 ? lv_color_hex(THEME_COLOR_TEXT_PRIMARY)
                                            : lv_color_hex(THEME_COLOR_TEXT_SECONDARY),
@@ -177,4 +202,5 @@ void StatusIndicatorController::update_warning_icon() {
         last_warning_state_ = 0;
         lv_obj_add_flag(warning_icon_, LV_OBJ_FLAG_HIDDEN);
     }
+    position_icons();
 }

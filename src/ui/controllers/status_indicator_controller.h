@@ -19,6 +19,8 @@ private:
     void update_wifi_status_icon();
     void update_warning_icon();
     void update_firmware_update_icon();
+    // Packs the visible icons against the right edge, rightmost first.
+    void position_icons();
 
     UIManager* ui_manager_;
     lv_obj_t* ble_status_icon_ = nullptr;

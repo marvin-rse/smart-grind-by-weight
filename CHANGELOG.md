@@ -4,6 +4,13 @@ This file records the user-visible changes in the community-maintained release
 line. Earlier release history remains available in the original project's
 [GitHub releases](https://github.com/jaapp/smart-grind-by-weight/releases).
 
+## [1.6.4] - 2026-11-03
+
+### Fixed
+- Status icons are packed against the right edge of the screen. The Wi-Fi icon
+  no longer sits right next to the profile name while grinding when Bluetooth
+  is off.
+
 ## [1.6.3] - 2026-10-21
 
 ### Fixed
