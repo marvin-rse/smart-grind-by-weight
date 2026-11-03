@@ -8,7 +8,7 @@ This file documents my specific build. It is based on this fork of
 
 | Area | Original (jaapp) | My build |
 |---|---|---|
-| Firmware source | jaapp, V1 only | this fork, **v1.6.3 V2** |
+| Firmware source | jaapp, V1 only | this fork, **v1.6.4 V2** |
 | Web flasher | jaapp.github.io | [marvin-rse.github.io](https://marvin-rse.github.io/smart-grind-by-weight/) |
 | Waveshare board | V1 (CO5300 display) | **V2 (SH8601 display)**, PCB silkscreened "Rev1.1" |
 | HX711 SCK | GPIO 2 | **GPIO 1** |
@@ -32,7 +32,7 @@ This file documents my specific build. It is based on this fork of
 
 ## Firmware
 
-- Current: **v1.6.3 for V2** — [`firmware/v1.6.3-v2/`](../firmware/v1.6.3-v2/)
+- Current: **v1.6.4 for V2** — [`firmware/v1.6.4-v2/`](../firmware/v1.6.4-v2/)
 - Flash it with the [web flasher](https://marvin-rse.github.io/smart-grind-by-weight/)
   (Chrome/Edge, USB) and select V2. Older versions are available under
   [Releases](https://github.com/marvin-rse/smart-grind-by-weight/releases).

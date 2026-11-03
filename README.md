@@ -21,7 +21,7 @@ performance and reliable Wi-Fi updates.
 
 ## What's different in this fork
 
-Current version: **[v1.6.3](https://github.com/marvin-rse/smart-grind-by-weight/releases/latest)**.
+Current version: **[v1.6.4](https://github.com/marvin-rse/smart-grind-by-weight/releases/latest)**.
 Compared with the upstream community firmware:
 
 **Display (V2)**
@@ -29,6 +29,7 @@ Compared with the upstream community firmware:
 - Smoother display with almost no lag — frames are rendered once into PSRAM instead of in many small strips.
 - No stutter when swiping between Single, Double and Custom — the selected dose
   is saved after the animation, not during it.
+- Status icons sit neatly in the top-right corner, also while grinding.
 
 **Firmware updates**
 - Updates are offered from this fork, so installing one keeps these changes.
